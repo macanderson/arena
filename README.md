@@ -70,7 +70,23 @@ Two invariants, enforced by `pnpm arena verify` in CI:
 
 The prompt states the complete behavior contract; the hidden tests assert only what the prompt states. Verification needs nothing but Node — no npm installs inside workspaces, no network.
 
-The built-in suite is deliberately small, fast, and cheap — a calibration set, not a research benchmark. For publishable resolve-rate claims, pair Arena's protocol with [SWE-bench Verified](https://github.com/SWE-bench/SWE-bench) under a containerized runner (e.g. [Harbor](https://github.com/laude-institute/harbor)) and use the official evaluator; see [METHODOLOGY.md](METHODOLOGY.md#scaling-up).
+The built-in suite is deliberately small, fast, and cheap — a calibration set, not a research benchmark. For publishable resolve-rate claims, run at scale on SWE-bench Verified with the **Harbor adapter** below.
+
+## Scale up: SWE-bench Verified via Harbor
+
+[`harbor/`](harbor/) is a [Harbor](https://www.harborframework.com/) adapter that runs **your** agent through Harbor's official, containerized SWE-bench / Terminal-Bench verifier — head-to-head against the industry-leading agents Harbor already ships (`claude-code`, `gemini-cli`, `codex`, `cursor-cli`, `aider`, …), all scored by the same repo-native test suite.
+
+Wire up your agent with one spec file — no Python:
+
+```bash
+cd harbor && pip install -e .
+export ARENA_AGENT_SPEC=$PWD/my-agent.toml    # copy specs/byo.example.toml
+harbor run --agent-import-path arena_harbor:ByoAgent \
+  --dataset swe-bench/swe-bench-verified -m anthropic/claude-sonnet-5 -n 4
+# then the same run with --agent claude-code, and compare resolved counts.
+```
+
+Ships with `ByoAgent` (bring your own) plus `OxagenAgent` / `StellaAgent` specs. Same model, same dataset, same official verifier — the harness is the only variable. See [`harbor/README.md`](harbor/README.md) and [METHODOLOGY.md](METHODOLOGY.md#scaling-up).
 
 ## Reading the report
 

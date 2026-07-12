@@ -3,3 +3,10 @@ results/
 dist/
 *.tsbuildinfo
 .DS_Store
+
+# Python (harbor adapter)
+harbor/.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+*.pyc
