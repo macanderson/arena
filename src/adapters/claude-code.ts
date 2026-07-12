@@ -13,9 +13,9 @@
  * so counts map through directly.
  */
 
-import { Adapter, emptyEnvelope, totalize, type AdapterRunArgs } from "./base.js";
 import { isRecord, num, parseJsonEnvelope } from "../parse.js";
 import type { ParsedEnvelope } from "../types.js";
+import { Adapter, type AdapterRunArgs, emptyEnvelope, totalize } from "./base.js";
 
 export class ClaudeCodeAdapter extends Adapter {
   readonly name = "claude-code";
@@ -63,13 +63,9 @@ export class ClaudeCodeAdapter extends Adapter {
     return {
       tokens,
       agentReportedUsd:
-        typeof reportedUsd === "number" && Number.isFinite(reportedUsd)
-          ? reportedUsd
-          : null,
+        typeof reportedUsd === "number" && Number.isFinite(reportedUsd) ? reportedUsd : null,
       agentReportedSeconds:
-        typeof durationMs === "number" && Number.isFinite(durationMs)
-          ? durationMs / 1000
-          : null,
+        typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs / 1000 : null,
       toolCalls: null, // Claude's json envelope does not report tool calls.
       iterations: num(env["num_turns"], 0) || null,
     };

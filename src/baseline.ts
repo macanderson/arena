@@ -18,7 +18,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { isRecord } from "./parse.js";
-import { perAgentSummary, type AgentSummary } from "./summary.js";
+import { type AgentSummary, perAgentSummary } from "./summary.js";
 import type { RunManifest, TrialResult } from "./types.js";
 
 export const BASELINE_SCHEMA = "arena-baseline/v1";
@@ -120,7 +120,7 @@ export function buildBaseline(
 }
 
 export function saveBaseline(path: string, baseline: Baseline): void {
-  writeFileSync(path, JSON.stringify(baseline, null, 2) + "\n");
+  writeFileSync(path, `${JSON.stringify(baseline, null, 2)}\n`);
 }
 
 export function loadBaseline(path: string): Baseline {
@@ -148,7 +148,8 @@ export function loadGateConfig(path?: string): GateThresholds {
     return typeof v === "number" && Number.isFinite(v) ? v : fallback;
   };
   if ("accuracyMaxDropPoints" in raw)
-    cfg.accuracyMaxDropPoints = numOrNull(raw["accuracyMaxDropPoints"], cfg.accuracyMaxDropPoints) ?? 0;
+    cfg.accuracyMaxDropPoints =
+      numOrNull(raw["accuracyMaxDropPoints"], cfg.accuracyMaxDropPoints) ?? 0;
   if ("accuracyRequireSignificant" in raw)
     cfg.accuracyRequireSignificant = raw["accuracyRequireSignificant"] === true;
   if ("tokensMaxIncreasePct" in raw)
@@ -157,8 +158,7 @@ export function loadGateConfig(path?: string): GateThresholds {
     cfg.costMaxIncreasePct = numOrNull(raw["costMaxIncreasePct"], cfg.costMaxIncreasePct);
   if ("speedMaxIncreasePct" in raw)
     cfg.speedMaxIncreasePct = numOrNull(raw["speedMaxIncreasePct"], cfg.speedMaxIncreasePct);
-  if ("allowTaskMismatch" in raw)
-    cfg.allowTaskMismatch = raw["allowTaskMismatch"] === true;
+  if ("allowTaskMismatch" in raw) cfg.allowTaskMismatch = raw["allowTaskMismatch"] === true;
   return cfg;
 }
 
@@ -210,9 +210,21 @@ function checkIncrease(
     return { metric, status: "warn", baseline: base, current, detail: `${summary} — not enforced` };
   }
   if (delta > maxPct) {
-    return { metric, status: "fail", baseline: base, current, detail: `${summary} exceeds +${String(maxPct)}%` };
+    return {
+      metric,
+      status: "fail",
+      baseline: base,
+      current,
+      detail: `${summary} exceeds +${String(maxPct)}%`,
+    };
   }
-  return { metric, status: "pass", baseline: base, current, detail: `${summary} within +${String(maxPct)}%` };
+  return {
+    metric,
+    status: "pass",
+    baseline: base,
+    current,
+    detail: `${summary} within +${String(maxPct)}%`,
+  };
 }
 
 function checkAccuracy(
@@ -225,8 +237,15 @@ function checkAccuracy(
   const summary = `${pts(base.successRate)} → ${pts(current.successRate)}`;
   if (drop <= thresholds.accuracyMaxDropPoints) {
     const gained = current.successRate - base.successRate;
-    const detail = gained > 0 ? `${summary} (improved +${pts(gained)})` : `${summary} (within tolerance)`;
-    return { metric: "accuracy", status: "pass", baseline: base.successRate, current: current.successRate, detail };
+    const detail =
+      gained > 0 ? `${summary} (improved +${pts(gained)})` : `${summary} (within tolerance)`;
+    return {
+      metric: "accuracy",
+      status: "pass",
+      baseline: base.successRate,
+      current: current.successRate,
+      detail,
+    };
   }
   // Regressed beyond tolerance. Optionally demand statistical significance:
   // baseline's lower 95% bound must sit above the new run's upper bound.
@@ -296,9 +315,27 @@ export function evaluateGate(
     }
     const checks: GateCheck[] = [
       checkAccuracy(base, cur, thresholds),
-      checkIncrease("tokens", base.medianTotalTokens, cur.medianTotalTokens, thresholds.tokensMaxIncreasePct, ""),
-      checkIncrease("cost", base.medianComputedCost, cur.medianComputedCost, thresholds.costMaxIncreasePct, ""),
-      checkIncrease("speed", base.medianWallClockSeconds, cur.medianWallClockSeconds, thresholds.speedMaxIncreasePct, "s"),
+      checkIncrease(
+        "tokens",
+        base.medianTotalTokens,
+        cur.medianTotalTokens,
+        thresholds.tokensMaxIncreasePct,
+        "",
+      ),
+      checkIncrease(
+        "cost",
+        base.medianComputedCost,
+        cur.medianComputedCost,
+        thresholds.costMaxIncreasePct,
+        "",
+      ),
+      checkIncrease(
+        "speed",
+        base.medianWallClockSeconds,
+        cur.medianWallClockSeconds,
+        thresholds.speedMaxIncreasePct,
+        "s",
+      ),
     ];
     agents.push({ key: base.key, regressed: checks.some((c) => c.status === "fail"), checks });
   }
@@ -345,6 +382,8 @@ export function formatGateReport(result: GateResult, baseline: Baseline): string
   }
   if (result.unmatchedBaseline.length) lines.push("");
 
-  lines.push(result.passed ? "PASS — no regression beyond thresholds." : "FAIL — regression detected.");
+  lines.push(
+    result.passed ? "PASS — no regression beyond thresholds." : "FAIL — regression detected.",
+  );
   return lines.join("\n");
 }

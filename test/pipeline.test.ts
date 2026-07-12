@@ -4,27 +4,15 @@
  * result persistence, and report generation.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { executeRun } from "../src/orchestrator.js";
 import { generateReport } from "../src/report.js";
-import {
-  applySolution,
-  loadTasks,
-  runVerification,
-  seedWorkspace,
-} from "../src/workspace.js";
+import { applySolution, loadTasks, runVerification, seedWorkspace } from "../src/workspace.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TASK_ROOT = join(HERE, "..", "tasks");
@@ -54,13 +42,18 @@ describe("task fixtures", () => {
       const pristineDir = scratch();
       seedWorkspace(task, pristineDir);
       const pristine = runVerification(task, pristineDir);
-      expect(pristine.passed, `${task.id}: held-out tests must FAIL on the pristine workspace`).toBe(false);
+      expect(
+        pristine.passed,
+        `${task.id}: held-out tests must FAIL on the pristine workspace`,
+      ).toBe(false);
 
       const solvedDir = scratch();
       seedWorkspace(task, solvedDir);
       applySolution(task, solvedDir);
       const solved = runVerification(task, solvedDir);
-      expect(solved.passed, `${task.id}: reference solution must pass:\n${solved.output}`).toBe(true);
+      expect(solved.passed, `${task.id}: reference solution must pass:\n${solved.output}`).toBe(
+        true,
+      );
     }
   }, 300_000);
 
@@ -127,8 +120,8 @@ describe("full run with mock agents", () => {
   }, 300_000);
 
   it("marks an uninvocable agent as agent-error, not failed", async () => {
-    const outDir = scratch();
-    const tasks = loadTasks(TASK_ROOT).slice(0, 1);
+    const _outDir = scratch();
+    const _tasks = loadTasks(TASK_ROOT).slice(0, 1);
 
     // stella with a bin override pointing at a nonexistent binary would fail
     // isAvailable(); instead simulate via a mock whose execute spawn errors by

@@ -12,9 +12,9 @@
  * subtracted, mirroring the oxagen rule.
  */
 
-import { Adapter, emptyEnvelope, totalize, type AdapterRunArgs } from "./base.js";
 import { countOf, isRecord, num, parseJsonEnvelope } from "../parse.js";
 import type { ParsedEnvelope } from "../types.js";
+import { Adapter, type AdapterRunArgs, emptyEnvelope, totalize } from "./base.js";
 
 export class StellaAdapter extends Adapter {
   readonly name = "stella";
@@ -33,9 +33,7 @@ export class StellaAdapter extends Adapter {
     return {
       STELLA_MODEL: this.resolveModel(args.model),
       STELLA_OUTPUT_FORMAT: "json",
-      ...(args.budgetUsd !== undefined
-        ? { STELLA_BUDGET: String(args.budgetUsd) }
-        : {}),
+      ...(args.budgetUsd !== undefined ? { STELLA_BUDGET: String(args.budgetUsd) } : {}),
     };
   }
 
@@ -46,11 +44,7 @@ export class StellaAdapter extends Adapter {
     const usage = isRecord(env["usage"]) ? env["usage"] : env;
     const rawInput = num(usage["inputTokens"] ?? usage["input_tokens"]);
     const cacheRead = Math.min(
-      num(
-        usage["cachedInputTokens"] ??
-          usage["cacheReadTokens"] ??
-          usage["cache_read_tokens"],
-      ),
+      num(usage["cachedInputTokens"] ?? usage["cacheReadTokens"] ?? usage["cache_read_tokens"]),
       rawInput,
     );
     const tokens = totalize({

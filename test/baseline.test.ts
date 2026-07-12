@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type Baseline,
   buildBaseline,
   DEFAULT_THRESHOLDS,
   evaluateGate,
   loadGateConfig,
-  type Baseline,
 } from "../src/baseline.js";
 import { perAgentSummary } from "../src/summary.js";
 import type { Outcome, RunManifest, TrialResult } from "../src/types.js";

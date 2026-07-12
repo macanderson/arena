@@ -1,5 +1,5 @@
 import type { AgentSpec } from "../types.js";
-import { Adapter } from "./base.js";
+import type { Adapter } from "./base.js";
 import { ClaudeCodeAdapter } from "./claude-code.js";
 import { GeminiAdapter } from "./gemini.js";
 import { MockAdapter } from "./mock.js";
@@ -23,9 +23,7 @@ export function adapterNames(): string[] {
 export function createAdapter(spec: AgentSpec): Adapter {
   const Ctor = registry[spec.adapter];
   if (!Ctor) {
-    throw new Error(
-      `Unknown adapter "${spec.adapter}". Available: ${adapterNames().join(", ")}`,
-    );
+    throw new Error(`Unknown adapter "${spec.adapter}". Available: ${adapterNames().join(", ")}`);
   }
   return new Ctor(spec);
 }

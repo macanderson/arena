@@ -18,12 +18,12 @@ describe("parseJsonEnvelope", () => {
   });
 
   it("falls back to the last parseable object", () => {
-    const stdout = ['not json', '{"a":1}', '{"b":2}'].join("\n");
+    const stdout = ["not json", '{"a":1}', '{"b":2}'].join("\n");
     expect(parseJsonEnvelope(stdout)).toEqual({ b: 2 });
   });
 
   it("ignores log lines interleaved with JSON", () => {
-    const stdout = ['INFO starting', '{"type":"result","ok":true}', 'INFO done'].join("\n");
+    const stdout = ["INFO starting", '{"type":"result","ok":true}', "INFO done"].join("\n");
     expect(parseJsonEnvelope(stdout)).toEqual({ type: "result", ok: true });
   });
 });
@@ -45,9 +45,7 @@ describe("num / countOf", () => {
 
 describe("sanitizeSegment", () => {
   it("flattens model slugs into safe filenames", () => {
-    expect(sanitizeSegment("anthropic/claude-opus-4.8")).toBe(
-      "anthropic_claude-opus-4.8",
-    );
+    expect(sanitizeSegment("anthropic/claude-opus-4.8")).toBe("anthropic_claude-opus-4.8");
   });
 });
 

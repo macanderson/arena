@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-
+import type { AdapterRunArgs } from "../src/adapters/base.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { GeminiAdapter } from "../src/adapters/gemini.js";
+import { adapterNames, createAdapter } from "../src/adapters/index.js";
 import { OxagenAdapter } from "../src/adapters/oxagen.js";
 import { StellaAdapter } from "../src/adapters/stella.js";
-import { adapterNames, createAdapter } from "../src/adapters/index.js";
-import type { AdapterRunArgs } from "../src/adapters/base.js";
 
 const baseArgs: AdapterRunArgs = {
   prompt: "fix the bug",
@@ -114,9 +113,7 @@ describe("stella", () => {
 
   it("prefixes bare model ids with zai/", () => {
     expect(adapter.resolveModel("glm-5.2")).toBe("zai/glm-5.2");
-    expect(adapter.resolveModel("anthropic/claude-sonnet-5")).toBe(
-      "anthropic/claude-sonnet-5",
-    );
+    expect(adapter.resolveModel("anthropic/claude-sonnet-5")).toBe("anthropic/claude-sonnet-5");
   });
 
   it("passes config via env, prompt via `run`", () => {
@@ -155,7 +152,9 @@ describe("gemini", () => {
       response: "done",
       stats: {
         models: {
-          "gemini-2.5-pro": { tokens: { prompt: 5000, candidates: 700, cached: 2000, total: 5700 } },
+          "gemini-2.5-pro": {
+            tokens: { prompt: 5000, candidates: 700, cached: 2000, total: 5700 },
+          },
           "gemini-2.5-flash": { tokens: { prompt: 100, candidates: 20, cached: 0, total: 120 } },
         },
         tools: { totalCalls: 9 },
