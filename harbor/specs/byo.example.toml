@@ -1,0 +1,76 @@
+# Bring-your-own-agent spec for the Arena Harbor adapter.
+#
+# Copy this file, edit it for your CLI, then run your agent under Harbor's
+# official verifier against Claude Code / Gemini / Codex / etc.:
+#
+#   export ARENA_AGENT_SPEC=$PWD/my-agent.toml
+#   export ARENA_AGENT_NAME=my-agent          # how results are labelled
+#   export MY_AGENT_API_KEY=...
+#   harbor run \
+#     --agent-import-path arena_harbor:ByoAgent \
+#     --dataset swe-bench/swe-bench-verified \
+#     -m anthropic/claude-sonnet-5 \
+#     --n-concurrent 4
+#
+# The headline number is the resolve-rate from Harbor's Docker verifier — the
+# same scorer applied to every agent. The token/cost fields below are only
+# annotations on each trial.
+
+# Harbor agent name is taken from ARENA_AGENT_NAME; `name` here documents intent.
+name = "my-agent"
+
+# The command that must be on PATH in the container after `install`.
+binary = "mycli"
+
+# One-shot invocation. Placeholders filled in for you:
+#   {bin}        -> the `binary` above
+#   {model}      -> full provider/model (e.g. anthropic/claude-sonnet-5)
+#   {provider}   -> text before the first "/"  (anthropic)
+#   {model_id}   -> text after  the first "/"  (claude-sonnet-5)
+#   {budget}     -> ARENA_BUDGET or default_budget
+#   {timeout}    -> ARENA_TIMEOUT (seconds) or 1800
+#   {instruction}-> the task prompt, ALREADY shell-quoted (don't add quotes)
+# Unknown braces ({}, ${VAR}, awk {print}) are left untouched.
+run_template = "{bin} solve --model {model} --max-usd {budget} --json {instruction}"
+
+# Provider keys / config to forward from the host into the container.
+env_keys = ["MY_AGENT_API_KEY", "ANTHROPIC_API_KEY"]
+
+default_model = "anthropic/claude-sonnet-5"
+default_budget = "5"
+
+version_command = "mycli --version"
+# First capture group is the version; omit to use the first output line.
+version_regex = "(\\d+\\.\\d+\\.\\d+)"
+
+[install]
+# "script" (portable: npm/pip/curl/tarball) or "binary" (upload a host binary).
+kind = "script"
+# OS packages ensured first (best-effort apt/apk/yum).
+system_packages = ["nodejs", "npm"]
+# Shell run as root; must leave `binary` on PATH. Override at run time with the
+# env var named in `script_env` if set.
+script = "npm install -g my-agent-cli@latest"
+script_env = "ARENA_MYCLI_INSTALL"
+
+# --- If your agent is a single native binary instead, use: ------------------
+# [install]
+# kind = "binary"
+# binary_env = "ARENA_MYCLI_BIN"   # host path; must match container OS/arch
+
+# Best-effort token/cost extraction from the agent's stdout. Optional.
+[metrics]
+kind = "json_tail"                 # parse the last JSON object the agent prints
+input_path = "usage.input_tokens"  # dotted path into that object
+output_path = "usage.output_tokens"
+cache_read_path = "usage.cache_read_tokens"
+cost_path = "total_cost_usd"
+# Set true if `input_path` already counts cache reads (they'll be subtracted so
+# token totals stay comparable across agents).
+input_includes_cache = false
+
+# --- Regex alternative (for agents that print a human summary line): ---------
+# [metrics]
+# kind = "regex"
+# cost_regex = "\\$([0-9.]+)"
+# total_regex = "([0-9,]+) tokens"

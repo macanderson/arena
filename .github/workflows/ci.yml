@@ -23,3 +23,19 @@ jobs:
       # Task audit: every task's held-out tests must FAIL on the pristine
       # workspace and PASS on the reference solution.
       - run: pnpm arena verify
+
+  harbor-adapter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harbor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e '.[dev]'
+      # Spec/metrics/command logic is Harbor-free; the agent tests exercise the
+      # real Harbor BaseInstalledAgent subclasses (Harbor is a declared dep).
+      - run: pytest -q
