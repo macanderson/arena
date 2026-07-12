@@ -17,7 +17,7 @@
 
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -26,20 +26,15 @@ import {
   buildBaseline,
   evaluateGate,
   formatGateReport,
+  type GateThresholds,
   loadBaseline,
   loadGateConfig,
   saveBaseline,
-  type GateThresholds,
 } from "./baseline.js";
 import { executeRun } from "./orchestrator.js";
 import { generateReport, loadRun } from "./report.js";
-import {
-  applySolution,
-  loadTasks,
-  runVerification,
-  seedWorkspace,
-} from "./workspace.js";
 import type { AgentSpec, LoadedTask } from "./types.js";
+import { applySolution, loadTasks, runVerification, seedWorkspace } from "./workspace.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TASK_ROOT = join(HERE, "..", "tasks");
@@ -156,9 +151,7 @@ async function cmdRun(argv: string[]): Promise<void> {
     const [adapter, model] = entry.split("=") as [string, string | undefined];
     const resolved = model ?? defaultModel;
     if (!resolved) {
-      console.error(
-        `No model for agent "${adapter}". Pass --model or use ${adapter}=<model>.`,
-      );
+      console.error(`No model for agent "${adapter}". Pass --model or use ${adapter}=<model>.`);
       process.exit(1);
     }
     return { adapter: adapter.trim(), model: resolved.trim() };
@@ -257,16 +250,13 @@ function cmdBaseline(argv: string[]): void {
     });
     const runDir = positionals[0];
     if (!runDir) {
-      console.error("Usage: arena baseline save <runDir> [--out arena-baseline.json] [--agent <adapter>]");
+      console.error(
+        "Usage: arena baseline save <runDir> [--out arena-baseline.json] [--agent <adapter>]",
+      );
       process.exit(1);
     }
     const { manifest, results } = loadRun(resolve(runDir));
-    const baseline = buildBaseline(
-      manifest,
-      results,
-      new Date().toISOString(),
-      values.agent,
-    );
+    const baseline = buildBaseline(manifest, results, new Date().toISOString(), values.agent);
     const outPath = resolve(values.out ?? DEFAULT_BASELINE_PATH);
     saveBaseline(outPath, baseline);
     console.log(
@@ -276,7 +266,9 @@ function cmdBaseline(argv: string[]): void {
           .map(
             (a) =>
               `  ${a.key}: ${(a.successRate * 100).toFixed(1)}% resolved` +
-              (a.medianTotalTokens !== null ? ` · ${Math.round(a.medianTotalTokens).toLocaleString()} tok` : "") +
+              (a.medianTotalTokens !== null
+                ? ` · ${Math.round(a.medianTotalTokens).toLocaleString()} tok`
+                : "") +
               (a.medianComputedCost !== null ? ` · $${a.medianComputedCost.toFixed(4)}` : ""),
           )
           .join("\n"),
@@ -311,14 +303,17 @@ function cmdGate(argv: string[]): void {
   });
   const runDir = positionals[0];
   if (!runDir) {
-    console.error("Usage: arena gate <runDir> [--baseline arena-baseline.json] [--config arena-gate.json] [flags]");
+    console.error(
+      "Usage: arena gate <runDir> [--baseline arena-baseline.json] [--config arena-gate.json] [flags]",
+    );
     process.exit(1);
   }
 
   const baseline = loadBaseline(resolve(values.baseline ?? DEFAULT_BASELINE_PATH));
 
   // Config file (or built-in defaults), then CLI flag overrides on top.
-  const configPath = values.config ?? (existsSync(resolve("arena-gate.json")) ? "arena-gate.json" : undefined);
+  const configPath =
+    values.config ?? (existsSync(resolve("arena-gate.json")) ? "arena-gate.json" : undefined);
   const thresholds: GateThresholds = loadGateConfig(configPath ? resolve(configPath) : undefined);
   // A finite number, or null (a non-numeric flag value disables the check).
   const num = (v: string | undefined): number | null => {
@@ -326,10 +321,14 @@ function cmdGate(argv: string[]): void {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : null;
   };
-  if (values["accuracy-drop"] !== undefined) thresholds.accuracyMaxDropPoints = num(values["accuracy-drop"]) ?? 0;
-  if (values["tokens-increase"] !== undefined) thresholds.tokensMaxIncreasePct = num(values["tokens-increase"]);
-  if (values["cost-increase"] !== undefined) thresholds.costMaxIncreasePct = num(values["cost-increase"]);
-  if (values["speed-increase"] !== undefined) thresholds.speedMaxIncreasePct = num(values["speed-increase"]);
+  if (values["accuracy-drop"] !== undefined)
+    thresholds.accuracyMaxDropPoints = num(values["accuracy-drop"]) ?? 0;
+  if (values["tokens-increase"] !== undefined)
+    thresholds.tokensMaxIncreasePct = num(values["tokens-increase"]);
+  if (values["cost-increase"] !== undefined)
+    thresholds.costMaxIncreasePct = num(values["cost-increase"]);
+  if (values["speed-increase"] !== undefined)
+    thresholds.speedMaxIncreasePct = num(values["speed-increase"]);
   if (values["require-significant"]) thresholds.accuracyRequireSignificant = true;
   if (values["allow-task-mismatch"]) thresholds.allowTaskMismatch = true;
 

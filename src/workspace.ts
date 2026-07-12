@@ -19,9 +19,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-
-import type { LoadedTask, TaskDef } from "./types.js";
 import { isRecord } from "./parse.js";
+import type { LoadedTask, TaskDef } from "./types.js";
 
 const VERIFY_DIR = ".arena-verify";
 
@@ -68,10 +67,10 @@ export function buildPrompt(task: TaskDef): string {
 export function seedWorkspace(task: LoadedTask, workDir: string): void {
   mkdirSync(workDir, { recursive: true });
   cpSync(join(task.dir, "workspace"), workDir, { recursive: true });
-  writeFileSync(join(workDir, "TASK.md"), buildPrompt(task) + "\n");
+  writeFileSync(join(workDir, "TASK.md"), `${buildPrompt(task)}\n`);
   writeFileSync(
     join(workDir, ".gitignore"),
-    ["node_modules/", "dist/", "coverage/", "*.log", `${VERIFY_DIR}/`].join("\n") + "\n",
+    `${["node_modules/", "dist/", "coverage/", "*.log", `${VERIFY_DIR}/`].join("\n")}\n`,
   );
   const git = (args: string[]): void => {
     execFileSync("git", args, { cwd: workDir, stdio: "ignore" });
@@ -107,10 +106,7 @@ export interface VerifyResult {
  * Any pre-existing `.arena-verify/` content (agent-planted or stale) is
  * removed first.
  */
-export function runVerification(
-  task: LoadedTask,
-  workDir: string,
-): VerifyResult {
+export function runVerification(task: LoadedTask, workDir: string): VerifyResult {
   const target = join(workDir, VERIFY_DIR);
   rmSync(target, { recursive: true, force: true });
   cpSync(join(task.dir, "verify"), target, { recursive: true });
@@ -122,17 +118,13 @@ export function runVerification(
   const { FORCE_COLOR: _forceColor, ...baseEnv } = process.env;
   const env = { ...baseEnv, NO_COLOR: "1" };
   try {
-    const output = execFileSync(
-      process.execPath,
-      ["--test", `${VERIFY_DIR}/**/*.test.mjs`],
-      {
-        cwd: workDir,
-        encoding: "utf8",
-        timeout: timeoutMs,
-        maxBuffer: 16 * 1024 * 1024,
-        env,
-      },
-    );
+    const output = execFileSync(process.execPath, ["--test", `${VERIFY_DIR}/**/*.test.mjs`], {
+      cwd: workDir,
+      encoding: "utf8",
+      timeout: timeoutMs,
+      maxBuffer: 16 * 1024 * 1024,
+      env,
+    });
     return { passed: true, output: tail(output) };
   } catch (error) {
     const e = error as { stdout?: string | Buffer; stderr?: string | Buffer; message?: string };
@@ -156,5 +148,5 @@ export function applySolution(task: LoadedTask, workDir: string): void {
 
 function tail(text: string, maxChars = 4000): string {
   const trimmed = text.trim();
-  return trimmed.length <= maxChars ? trimmed : "…" + trimmed.slice(-maxChars);
+  return trimmed.length <= maxChars ? trimmed : `…${trimmed.slice(-maxChars)}`;
 }

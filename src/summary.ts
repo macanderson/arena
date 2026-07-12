@@ -58,9 +58,7 @@ export function perAgentSummary(results: TrialResult[]): AgentSummary[] {
     const scored = all.filter((r) => r.outcome !== "agent-error");
     const passed = scored.filter((r) => r.outcome === "passed").length;
     const first = all[0] as TrialResult;
-    const costs = scored
-      .map((r) => r.cost.computedUsd)
-      .filter((c): c is number => c !== null);
+    const costs = scored.map((r) => r.cost.computedUsd).filter((c): c is number => c !== null);
     const selfCosts = scored
       .map((r) => r.cost.agentReportedUsd)
       .filter((c): c is number => c !== null);
@@ -73,9 +71,7 @@ export function perAgentSummary(results: TrialResult[]): AgentSummary[] {
       passed,
       successRate: scored.length ? passed / scored.length : 0,
       successCI: wilsonInterval(passed, scored.length),
-      medianWallClockSeconds: medianOrNull(
-        scored.map((r) => r.timing.wallClockSeconds),
-      ),
+      medianWallClockSeconds: medianOrNull(scored.map((r) => r.timing.wallClockSeconds)),
       medianTotalTokens: medianOrNull(scored.map((r) => r.tokens.total)),
       medianComputedCost: medianOrNull(costs),
       medianAgentReportedCost: medianOrNull(selfCosts),

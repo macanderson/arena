@@ -11,9 +11,8 @@
 
 import { cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
-
-import { Adapter, totalize, type AdapterRunArgs, type ExecOutcome } from "./base.js";
 import type { ParsedEnvelope } from "../types.js";
+import { Adapter, type AdapterRunArgs, type ExecOutcome, totalize } from "./base.js";
 
 export class MockAdapter extends Adapter {
   readonly name = "mock";

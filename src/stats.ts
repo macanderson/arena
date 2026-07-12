@@ -6,20 +6,13 @@
  */
 
 /** 95% Wilson score interval for a binomial proportion. */
-export function wilsonInterval(
-  successes: number,
-  n: number,
-  z = 1.96,
-): [number, number] {
+export function wilsonInterval(successes: number, n: number, z = 1.96): [number, number] {
   if (n === 0) return [0, 0];
   const p = successes / n;
   const denom = 1 + (z * z) / n;
   const center = p + (z * z) / (2 * n);
   const margin = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
-  return [
-    Math.max(0, (center - margin) / denom),
-    Math.min(1, (center + margin) / denom),
-  ];
+  return [Math.max(0, (center - margin) / denom), Math.min(1, (center + margin) / denom)];
 }
 
 /**

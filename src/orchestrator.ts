@@ -14,21 +14,15 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir, platform, arch } from "node:os";
-import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { arch, platform, tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { createAdapter, type Adapter } from "./adapters/index.js";
+import { type Adapter, createAdapter } from "./adapters/index.js";
 import { MockAdapter } from "./adapters/mock.js";
 import { diffStats, sanitizeSegment } from "./parse.js";
 import { computeCost, loadPricing } from "./pricing.js";
-import {
-  buildPrompt,
-  collectDiff,
-  runVerification,
-  seedWorkspace,
-} from "./workspace.js";
 import type {
   AgentSpec,
   LoadedTask,
@@ -37,18 +31,17 @@ import type {
   RunManifest,
   TrialResult,
 } from "./types.js";
+import { buildPrompt, collectDiff, runVerification, seedWorkspace } from "./workspace.js";
 
 export const HARNESS_VERSION = "0.1.0";
 
-export interface RunProgress {
-  (message: string): void;
-}
+export type RunProgress = (message: string) => void;
 
 export async function executeRun(
   config: RunConfig,
   log: RunProgress = () => {},
 ): Promise<{ runDir: string; manifest: RunManifest; results: TrialResult[] }> {
-  const pricing = loadPricing();
+  const _pricing = loadPricing();
   const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${randomUUID().slice(0, 8)}`;
   const runDir = join(config.outDir, runId);
   mkdirSync(join(runDir, "trials"), { recursive: true });
@@ -105,10 +98,7 @@ export async function executeRun(
         log(`▶ trial ${trial}/${config.trials} · ${task.id} · ${spec.adapter} (${spec.model})`);
         const result = await runOne(task, spec, adapter, trial, config, runId, runDir);
         results.push(result);
-        writeFileSync(
-          join(runDir, "trials", `${result.id}.json`),
-          JSON.stringify(result, null, 2),
-        );
+        writeFileSync(join(runDir, "trials", `${result.id}.json`), JSON.stringify(result, null, 2));
         const mark =
           result.outcome === "passed" ? "✅" : result.outcome === "agent-error" ? "⚠️" : "❌";
         log(
@@ -119,10 +109,7 @@ export async function executeRun(
     }
   }
 
-  writeFileSync(
-    join(runDir, "results.json"),
-    JSON.stringify({ manifest, results }, null, 2),
-  );
+  writeFileSync(join(runDir, "results.json"), JSON.stringify({ manifest, results }, null, 2));
 
   return { runDir, manifest, results };
 }

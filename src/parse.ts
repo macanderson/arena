@@ -5,9 +5,7 @@
 
 /** Coerce an unknown JSON value into a finite non-negative number, else fallback. */
 export function num(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : fallback;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 /** A count that may arrive as an array (length) or a number. Null when absent. */
@@ -28,9 +26,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * per line). We want the last `type: "result"` object, falling back to the
  * last parseable object. Banners and log lines are ignored.
  */
-export function parseJsonEnvelope(
-  stdout: string,
-): Record<string, unknown> | null {
+export function parseJsonEnvelope(stdout: string): Record<string, unknown> | null {
   if (!stdout) return null;
 
   const lines = stdout

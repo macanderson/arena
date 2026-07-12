@@ -24,9 +24,12 @@
     "arena": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "lint": "biome ci src test",
+    "format": "biome check --write src test",
     "verify:tasks": "tsx src/cli.ts verify"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.2",
     "@types/node": "^25.9.1",
     "tsx": "^4.19.2",
     "typescript": "^5.8.3",

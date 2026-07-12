@@ -9,11 +9,10 @@
  */
 
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import type { PricingTable, TokenCounts } from "./types.js";
 import { isRecord, num } from "./parse.js";
+import type { PricingTable, TokenCounts } from "./types.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

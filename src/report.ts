@@ -14,23 +14,15 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import {
-  mcnemarExact,
-  median,
-  pairedBootstrapDelta,
-  wilsonInterval,
-} from "./stats.js";
 import { isRecord } from "./parse.js";
+import { mcnemarExact, median, pairedBootstrapDelta, wilsonInterval } from "./stats.js";
 import type { RunManifest, TrialResult } from "./types.js";
 
 export function loadRun(runDir: string): {
   manifest: RunManifest;
   results: TrialResult[];
 } {
-  const raw: unknown = JSON.parse(
-    readFileSync(join(runDir, "results.json"), "utf8"),
-  );
+  const raw: unknown = JSON.parse(readFileSync(join(runDir, "results.json"), "utf8"));
   if (!isRecord(raw) || !isRecord(raw["manifest"]) || !Array.isArray(raw["results"])) {
     throw new Error(`Malformed results.json in ${runDir}`);
   }
@@ -67,15 +59,21 @@ export function generateReport(runDir: string): string {
 
   const lines: string[] = [];
   lines.push(`# Arena run report — \`${manifest.runId}\``, "");
-  lines.push(`- Harness: ${manifest.harness.name} v${manifest.harness.version} (git ${manifest.harness.gitSha})`);
+  lines.push(
+    `- Harness: ${manifest.harness.name} v${manifest.harness.version} (git ${manifest.harness.gitSha})`,
+  );
   lines.push(`- Host: ${manifest.host.platform}/${manifest.host.arch}, node ${manifest.host.node}`);
   lines.push(`- Created: ${manifest.createdAt}`);
-  lines.push(`- Trials per (task, agent): ${String(manifest.trials)} · timeout ${String(manifest.timeoutSeconds)}s · budget ${manifest.budgetUsd === null ? "none" : `$${String(manifest.budgetUsd)}`} · seed ${String(manifest.seed)}`);
+  lines.push(
+    `- Trials per (task, agent): ${String(manifest.trials)} · timeout ${String(manifest.timeoutSeconds)}s · budget ${manifest.budgetUsd === null ? "none" : `$${String(manifest.budgetUsd)}`} · seed ${String(manifest.seed)}`,
+  );
   lines.push(`- Tasks (${String(manifest.taskIds.length)}): ${manifest.taskIds.join(", ")}`);
   lines.push("");
   lines.push("Agents:");
   for (const a of manifest.agents) {
-    lines.push(`- **${a.adapter}** · model \`${a.model}\` (resolved \`${a.resolvedModel}\`) · version \`${a.version}\``);
+    lines.push(
+      `- **${a.adapter}** · model \`${a.model}\` (resolved \`${a.resolvedModel}\`) · version \`${a.version}\``,
+    );
   }
   lines.push("");
 
@@ -111,12 +109,8 @@ export function generateReport(runDir: string): string {
     const [lo, hi] = wilsonInterval(passed, scored.length);
     const wall = median(scored.map((r) => r.timing.wallClockSeconds));
     const toks = median(scored.map((r) => r.tokens.total));
-    const costs = scored
-      .map((r) => r.cost.computedUsd)
-      .filter((c): c is number => c !== null);
-    const self = scored
-      .map((r) => r.cost.agentReportedUsd)
-      .filter((c): c is number => c !== null);
+    const costs = scored.map((r) => r.cost.computedUsd).filter((c): c is number => c !== null);
+    const self = scored.map((r) => r.cost.agentReportedUsd).filter((c): c is number => c !== null);
     lines.push(
       `| ${key} | ${String(scored.length)} | ${String(passed)} | ${pct(scored.length ? passed / scored.length : 0)} (${pct(lo)}–${pct(hi)}) | ${wall.toFixed(1)}s | ${Math.round(toks).toLocaleString()} | ${fmtUsd(costs.length ? median(costs) : null)} | ${fmtUsd(self.length ? median(self) : null)} |`,
     );
@@ -161,7 +155,11 @@ export function generateReport(runDir: string): string {
     });
     lines.push(`| ${taskId} | ${cells.join(" | ")} |`);
   }
-  lines.push("", "One symbol per trial: ✅ passed · ❌ failed · ⏱ timeout · ⚠️ agent-error (excluded).", "");
+  lines.push(
+    "",
+    "One symbol per trial: ✅ passed · ❌ failed · ⏱ timeout · ⚠️ agent-error (excluded).",
+    "",
+  );
 
   // ── Excluded trials ──
   if (errorTrials.length > 0) {

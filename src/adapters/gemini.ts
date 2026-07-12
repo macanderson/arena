@@ -17,9 +17,9 @@
  * envelope. Re-verify against your installed version before publishing runs.
  */
 
-import { Adapter, emptyEnvelope, totalize, type AdapterRunArgs } from "./base.js";
 import { isRecord, num, parseJsonEnvelope } from "../parse.js";
 import type { ParsedEnvelope } from "../types.js";
+import { Adapter, type AdapterRunArgs, emptyEnvelope, totalize } from "./base.js";
 
 export class GeminiAdapter extends Adapter {
   readonly name = "gemini";

@@ -12,9 +12,9 @@
  * inputTokens − cachedInputTokens.
  */
 
-import { Adapter, emptyEnvelope, totalize, type AdapterRunArgs } from "./base.js";
 import { countOf, isRecord, num, parseJsonEnvelope } from "../parse.js";
 import type { ParsedEnvelope } from "../types.js";
+import { Adapter, type AdapterRunArgs, emptyEnvelope, totalize } from "./base.js";
 
 export class OxagenAdapter extends Adapter {
   readonly name = "oxagen";
@@ -30,9 +30,7 @@ export class OxagenAdapter extends Adapter {
   override env(args: AdapterRunArgs): Record<string, string> {
     return {
       OXAGEN_MODEL_SLUG: args.model,
-      ...(args.budgetUsd !== undefined
-        ? { OXAGEN_BUDGET: String(args.budgetUsd) }
-        : {}),
+      ...(args.budgetUsd !== undefined ? { OXAGEN_BUDGET: String(args.budgetUsd) } : {}),
     };
   }
 
@@ -56,9 +54,7 @@ export class OxagenAdapter extends Adapter {
       tokens,
       agentReportedUsd: null, // envelope carries no cost
       agentReportedSeconds:
-        typeof durationMs === "number" && Number.isFinite(durationMs)
-          ? durationMs / 1000
-          : null,
+        typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs / 1000 : null,
       toolCalls: countOf(env["commandsRun"]),
       iterations: num(env["steps"], 0) || null,
     };
