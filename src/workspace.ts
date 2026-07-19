@@ -28,7 +28,12 @@ export function loadTasks(taskRoot: string): LoadedTask[] {
     const dir = join(taskRoot, entry.name);
     const defPath = join(dir, "task.json");
     if (!existsSync(defPath)) continue;
-    const def: unknown = JSON.parse(readFileSync(defPath, "utf8"));
+    let def: unknown;
+    try {
+      def = JSON.parse(readFileSync(defPath, "utf8"));
+    } catch (error) {
+      throw new Error(`Invalid JSON in ${defPath}: ${(error as Error).message}`);
+    }
     if (!isRecord(def) || typeof def["id"] !== "string") {
       throw new Error(`Malformed task.json in ${dir}`);
     }
@@ -80,8 +85,12 @@ export async function seedWorkspace(task: LoadedTask, workDir: string): Promise<
   await git(["commit", "-q", "-m", "arena: seed workspace", "--no-verify"]);
 }
 
-/** Diff of the agent's changes (tracked + new files) against the seed commit. */
-export async function collectDiff(workDir: string): Promise<string> {
+/**
+ * Diff of the agent's changes (tracked + new files) against the seed commit.
+ * Returns null when git itself failed (oversized diff, corrupted repo) — an
+ * unknown diff, which callers must not conflate with "no changes".
+ */
+export async function collectDiff(workDir: string): Promise<string | null> {
   try {
     await execFileAsync("git", ["add", "-A"], { cwd: workDir });
     const { stdout } = await execFileAsync("git", ["diff", "--cached", "HEAD"], {
@@ -91,7 +100,7 @@ export async function collectDiff(workDir: string): Promise<string> {
     });
     return stdout;
   } catch {
-    return "";
+    return null;
   }
 }
 

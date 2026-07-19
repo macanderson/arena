@@ -95,6 +95,13 @@ export abstract class Adapter {
   /**
    * Run the agent. Overridable (the mock adapter runs in-process). argv arrays
    * only — nothing is ever interpolated through a shell.
+   *
+   * On POSIX the child gets its own process group so a timeout (or exit) can
+   * kill the agent's whole process tree, not just the direct child: coding
+   * agents routinely spawn shells, watchers, and servers, and a surviving
+   * grandchild could otherwise hold the stdio pipes open forever (hanging the
+   * run past its timeout) or keep mutating the workspace while the held-out
+   * verifier runs.
    */
   execute(args: AdapterRunArgs): Promise<ExecOutcome> {
     return new Promise((resolve) => {
@@ -113,6 +120,7 @@ export abstract class Adapter {
       let stderr = "";
       let timedOut = false;
       let settled = false;
+      let drainTimer: NodeJS.Timeout | undefined;
 
       const killTree = (): void => {
         if (detached && child.pid !== undefined) {
@@ -126,33 +134,49 @@ export abstract class Adapter {
         child.kill("SIGKILL");
       };
 
+      const settle = (outcome: ExecOutcome): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (drainTimer !== undefined) clearTimeout(drainTimer);
+        resolve(outcome);
+      };
+
       const timer = setTimeout(() => {
         timedOut = true;
         killTree();
       }, args.timeoutSeconds * 1000);
 
-      const settle = (outcome: ExecOutcome): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(outcome);
-      };
-
-      child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
-      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => (stdout += chunk));
+      child.stderr.on("data", (chunk: string) => (stderr += chunk));
 
       child.on("error", (err) => {
-        settle({ stdout, stderr, exitCode: null, timedOut: false, spawnError: err.message });
+        settle({
+          stdout,
+          stderr,
+          exitCode: null,
+          timedOut: false,
+          spawnError: err.message,
+        });
       });
 
+      // "close" waits for the stdio pipes to drain, which an orphaned
+      // grandchild that inherited them can prevent forever. "exit" is the
+      // authoritative signal: reap anything left in the process group, then
+      // give the pipes a short grace period to flush before settling. The
+      // grace timer is NOT unref'd: it must keep the event loop alive so the
+      // promise always settles even if "close" never fires.
+      child.on("exit", (code) => {
+        clearTimeout(timer);
+        killTree();
+        drainTimer = setTimeout(() => {
+          settle({ stdout, stderr, exitCode: code, timedOut });
+        }, 2000);
+      });
       child.on("close", (code) => {
         settle({ stdout, stderr, exitCode: code, timedOut });
-      });
-
-      // "close" waits for the stdio streams to drain; an escaped grandchild
-      // holding the pipes must not stall the run forever after exit.
-      child.on("exit", (code) => {
-        setTimeout(() => settle({ stdout, stderr, exitCode: code, timedOut }), 2000).unref();
       });
     });
   }

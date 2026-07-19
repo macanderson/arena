@@ -11,6 +11,46 @@ minor bumps may include breaking changes).
 - Open-source launch artifacts: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue
   and PR templates, and this changelog.
 - `.stella/` agent caches are now gitignored.
+- **Site** (`site/`) — arena.oxagen.sh: landing page, the research paper
+  *The State of Agent Benchmarking*, and the draft **Agent Benchmark Protocol**
+  spec (`docs/agent-benchmark-protocol.md`,
+  `docs/agent-engine-benchmarks-2026.md`).
+- Pretty-printed (multi-line) JSON envelopes are now parsed — both in the TS
+  harness (`parseJsonEnvelope`) and the Harbor adapter (`last_json_object`).
+- `arena run -o <dir>` short flag (the form the README documents).
+
+### Fixed
+- **Timeouts kill the agent's whole process tree** (POSIX process groups), and
+  a trial can no longer hang on stdio pipes held open by orphaned
+  grandchildren — which could previously also outlive the agent and tamper
+  with verification.
+- **Zero-token trials no longer poison medians or the gate**: scored trials
+  whose envelope had no parseable usage are excluded from token/cost medians
+  and deltas (reported separately), instead of dragging them toward zero.
+- **claude-code model pinning**: `anthropic/claude-sonnet-5` now resolves to
+  `claude-sonnet-5` instead of the floating `sonnet` alias, preserving version
+  pinning, `matchedModels`, and pricing lookups.
+- **Gemini token normalization** counts `thoughts` (reasoning) and `tool`
+  tokens; both were previously dropped, understating Gemini usage.
+- Per-trial error containment: a harness-side failure (git/FS error) scores
+  that one trial `agent-error` instead of aborting the run; `results.json` is
+  rewritten after every trial so a crash never loses completed trials.
+- Wall clock now measures spawn-to-exit only (workspace seeding excluded),
+  matching METHODOLOGY.md.
+- `arena verify <unknown-id>` errors instead of vacuously passing; numeric
+  CLI flags are validated (`--timeout 10m` errors instead of parsing as 10);
+  a typo'd gate threshold errors instead of silently disabling the check;
+  duplicate `--agents` specs are rejected (their trial ids would collide).
+- `git diff` failures are now distinguished from an empty diff, so a trial
+  with real changes can no longer be misclassified `agent-error`.
+- Cache-write tokens with no `cacheWritePerM` price now yield a null cost
+  (never guessed with the input rate).
+- Report per-agent table shares `perAgentSummary` with the baseline/gate (no
+  more NaN rows when every trial of an agent errored).
+- Harbor adapter: non-integer `ARENA_TIMEOUT` falls back to 1800s with a
+  warning instead of silently disabling the container timeout; an empty
+  `{budget}` in a run template fails loudly; unknown `metrics.kind` values are
+  rejected at spec load.
 
 ## [0.1.0] — initial release
 

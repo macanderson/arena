@@ -27,9 +27,9 @@ describe("registry", () => {
 describe("claude-code", () => {
   const adapter = new ClaudeCodeAdapter();
 
-  it("maps slugs to family aliases", () => {
-    expect(adapter.resolveModel("anthropic/claude-sonnet-5")).toBe("sonnet");
-    expect(adapter.resolveModel("anthropic/claude-opus-4.8")).toBe("opus");
+  it("preserves the full model id (version pinning), stripping only the provider prefix", () => {
+    expect(adapter.resolveModel("anthropic/claude-sonnet-5")).toBe("claude-sonnet-5");
+    expect(adapter.resolveModel("anthropic/claude-opus-4.8")).toBe("claude-opus-4.8");
     expect(adapter.resolveModel("weird-model")).toBe("weird-model");
   });
 
@@ -39,7 +39,7 @@ describe("claude-code", () => {
       "--output-format",
       "json",
       "--model",
-      "sonnet",
+      "claude-sonnet-5",
       "--permission-mode",
       "acceptEdits",
       "--max-budget-usd",
@@ -148,13 +148,20 @@ describe("gemini", () => {
     expect(argv).toContain("auto_edit");
   });
 
-  it("sums per-model token stats and subtracts cached from prompt", () => {
+  it("sums per-model token stats, subtracts cached, and counts thoughts + tool tokens", () => {
     const stdout = JSON.stringify({
       response: "done",
       stats: {
         models: {
           "gemini-2.5-pro": {
-            tokens: { prompt: 5000, candidates: 700, cached: 2000, total: 5700 },
+            tokens: {
+              prompt: 5000,
+              candidates: 700,
+              thoughts: 300,
+              tool: 50,
+              cached: 2000,
+              total: 6050,
+            },
           },
           "gemini-2.5-flash": { tokens: { prompt: 100, candidates: 20, cached: 0, total: 120 } },
         },
@@ -162,9 +169,12 @@ describe("gemini", () => {
       },
     });
     const parsed = adapter.parseEnvelope(stdout);
-    expect(parsed.tokens.input).toBe(5100 - 2000);
+    // input = prompt (5100) + tool (50) − cached (2000)
+    expect(parsed.tokens.input).toBe(5100 + 50 - 2000);
     expect(parsed.tokens.cacheRead).toBe(2000);
-    expect(parsed.tokens.output).toBe(720);
+    // output = candidates (720) + thoughts (300): reasoning tokens are billed
+    // as output and must not be dropped from the head-to-head comparison.
+    expect(parsed.tokens.output).toBe(720 + 300);
     expect(parsed.toolCalls).toBe(9);
   });
 });

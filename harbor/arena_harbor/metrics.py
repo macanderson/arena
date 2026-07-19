@@ -39,9 +39,10 @@ class ParsedMetrics:
 
 
 def last_json_object(text: str) -> dict[str, Any] | None:
-    """Return the last ``{"type":"result"}`` JSON object in ``text`` (JSONL or a
-    single object), else the last parseable object. Non-JSON lines are ignored.
-    Mirrors the TS ``parseJsonEnvelope``.
+    """Return the last ``{"type":"result"}`` JSON object in ``text`` (JSONL, a
+    single object, or a pretty-printed multi-line object), else the last
+    parseable object. Non-JSON lines are ignored. Mirrors the TS
+    ``parseJsonEnvelope``.
     """
     if not text:
         return None
@@ -57,7 +58,75 @@ def last_json_object(text: str) -> dict[str, Any] | None:
             fallback = obj
         if obj.get("type") == "result":
             return obj
-    return fallback
+
+    # No single-line result envelope: pretty-printed envelopes span lines, so
+    # fall back to a string-aware brace scan over the whole output.
+    scanned = _scan_json_objects(text)
+    for obj in reversed(scanned):
+        if obj.get("type") == "result":
+            return obj
+    if fallback is not None:
+        return fallback
+    return scanned[-1] if scanned else None
+
+
+def _scan_json_objects(text: str) -> list[dict[str, Any]]:
+    """Find top-level JSON objects in text that may contain non-JSON noise.
+
+    Candidates are anchored at lines that START with ``{`` (a pretty-printed
+    envelope's opening line), so a stray brace mid-way through a log line can
+    never derail the scan. From each anchor, string-aware brace matching finds
+    the balanced end; spans that fail to parse are skipped.
+    """
+    found: list[dict[str, Any]] = []
+    offset = 0
+    consumed_up_to = -1
+    for line in text.split("\n"):
+        line_start = offset
+        offset += len(line) + 1
+        if line_start < consumed_up_to:
+            continue  # inside an already-parsed object
+        stripped = line.lstrip()
+        if not stripped.startswith("{"):
+            continue
+        start = line_start + (len(line) - len(stripped))
+        end = _balanced_object_end(text, start)
+        if end == -1:
+            continue
+        try:
+            obj = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            continue  # balanced braces but not JSON (shell/awk) — skip
+        if isinstance(obj, dict):
+            found.append(obj)
+            consumed_up_to = end + 1
+    return found
+
+
+def _balanced_object_end(text: str, start: int) -> int:
+    """Index of the ``}`` closing the object opened at ``start``, or -1."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
 
 
 def dotted_get(obj: Any, path: str | None) -> Any:
