@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The State of Agent Benchmarking · Arena</title>
+  <meta name="description" content="A July 2026 survey of agent benchmarks: everyone measures the model, almost nobody measures the engine you ship. Evidence, gap analysis, and the case for an Agent Benchmark Protocol." />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%8F%B1%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-head">
+      <a class="brand" href="/">arena<span>.oxagen.sh</span></a>
+      <nav>
+        <a href="/paper/" aria-current="page">Paper</a>
+        <a href="/spec/">Spec</a>
+        <a href="https://github.com/oxageninc/arena/blob/main/METHODOLOGY.md">Methodology</a>
+        <a href="https://github.com/oxageninc/arena">GitHub</a>
+      </nav>
+    </header>
+
+    <article class="article">
+      <p class="kicker">Research paper · July 2026 · v1.0</p>
+      <h1>The State of Agent Benchmarking</h1>
+      <p class="byline">Everyone measures the model. Almost nobody measures the engine you ship. · Mac Anderson, Oxagen</p>
+
+      <div class="abstract">
+        <strong>Abstract.</strong> Teams that ship AI agents change their engine every week: prompts,
+        tools, planning loops, context strategies, and orchestration. The model changes a few times a
+        year. Yet nearly every public benchmark ranks models with the harness held fixed, the exact
+        inverse of the question a working team needs answered: did my last change make my agent
+        better or worse, on the model I already run? Recent controlled evidence says this inversion
+        is not cosmetic. In a 3x3 factorial study on SWE-bench Verified, harness-induced variance
+        exceeded model-induced variance by 7.8x, and model rankings reversed in six of nine harness
+        pairings [3]. This paper surveys the landscape as of July 2026 through that lens and finds
+        that no existing system combines matched-model engine isolation, efficiency grading,
+        statistically honest CI gating, and live task sourcing with verified fixes as reference
+        traces. We close by describing that missing system, and an interchange standard that would
+        let any harness provide it.
+      </div>
+
+      <div class="abstract" style="margin-top:14px">
+        <strong>Conflict of interest, stated up front:</strong> the author builds
+        <a href="https://github.com/oxageninc/arena">Arena</a>, an open-source agent-engine benchmark
+        harness, and the Oxagen and Stella agents that appear in its examples. This paper argues a
+        position. Every load-bearing claim carries a citation, and Section 6 names the systems that
+        already do parts of what Arena does.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#question">The question benchmarks answer, and the question teams ask</a></li>
+          <li><a href="#coding">Survey: coding-agent benchmarks</a></li>
+          <li><a href="#general">Survey: general agent benchmarks</a></li>
+          <li><a href="#traces">Survey: trace-based evaluation and eval platforms</a></li>
+          <li><a href="#practices">Best practices for a credible agent benchmark</a></li>
+          <li><a href="#gap">Gap analysis: four capabilities, and who has them</a></li>
+          <li><a href="#arena">Arena, and the Agent Benchmark Protocol</a></li>
+          <li><a href="#limits">Limitations</a></li>
+          <li><a href="#refs">References</a></li>
+        </ol>
+      </nav>
+
+      <div class="article-body">
+        <h2 id="question">1. The question benchmarks answer, and the question teams ask</h2>
+        <p>
+          A model leaderboard answers: given a fixed scaffold, which model scores highest? That is
+          the right question for a lab choosing a base model, and the wrong question for everyone
+          downstream. Downstream, the model is a config value. The product is the engine: the system
+          prompt, the tool set, the retrieval and context policy, the planning loop, the subagent
+          topology, and the guardrails. One survey puts the distinction plainly: evaluating the LLM
+          alone is like examining an engine on a stand, while agent evaluation must assess the whole
+          car under driving conditions [2].
+        </p>
+        <p>
+          The scale of what the scaffold contributes has been measured repeatedly. SWE-agent showed
+          in 2024 that the agent-computer interface alone moves resolve rates at a fixed model [24].
+          Agentless showed the same year that a deliberately non-agentic pipeline could outperform
+          elaborate agents at a fraction of the cost [25]. And in 2026 a controlled factorial study
+          quantified it: across three models and three harness configurations on a 100-task
+          SWE-bench Verified subset, the harness contributed 18.48 pp² of score variance against the
+          model's 2.37 pp², a ratio of 7.8x, with six model-ranking reversals across nine harness
+          pairings [3]. The authors' conclusion is the thesis of this paper: the execution harness,
+          the infrastructure layer that governs context construction, tool interaction,
+          orchestration, and verification, is often a stronger determinant of agent performance than
+          the model it wraps [3].
+        </p>
+        <p>
+          The benchmark ecosystem has not caught up. The most comprehensive survey of agent
+          evaluation to date lists "Decoupling LLM &amp; Harness Evaluation" as future work: most
+          current benchmarks conflate the two targets, and no established benchmark provides
+          controlled protocols that vary each factor independently [1]. The same survey finds cost
+          and efficiency metrics broadly neglected, echoing "AI Agents That Matter": accuracy-only
+          leaderboards drive needlessly costly agents [1, 23].
+        </p>
+
+        <h2 id="coding">2. Survey: coding-agent benchmarks</h2>
+        <p>
+          <strong>SWE-bench</strong> (Princeton/Stanford, 2023) established the template: 2,294 real
+          GitHub issues from 12 Python repos, graded by the repo's own FAIL_TO_PASS and PASS_TO_PASS
+          tests [4]. <strong>SWE-bench Verified</strong> (OpenAI, 2024) human-filtered 500 instances
+          to remove impossible or underspecified tasks [5]. <strong>SWE-bench Multimodal</strong>
+          adds visual, JavaScript-centric issues; <strong>SWE-bench Pro</strong> (Scale AI, 2025)
+          raises difficulty with long-horizon, enterprise-style tasks and a held-out commercial
+          subset [6]. <strong>SWE-bench Live</strong> (Microsoft Research and community, 2025)
+          attacks contamination directly with a monthly-refreshed feed of new issues [7]. All of
+          these grade one thing: did the repo's tests pass. None grades diff size, token spend, or
+          wall clock as a ranked metric, and their leaderboards mix (model, scaffold) pairs, so a
+          score is attributable to neither alone. They are, however, the raw material engine
+          benchmarking needs: real repos, real issues, executable verification.
+        </p>
+        <p>
+          <strong>Terminal-Bench</strong> (Stanford and the Laude Institute, 2025) measures
+          terminal-native task completion in containers; its 2.0 release ships on
+          <strong>Harbor</strong> [8, 9]. Harbor deserves its own entry: it is a meta-harness from
+          the Terminal-Bench creators for "evaluating and optimizing agents and language models",
+          wrapping third-party benchmarks (Terminal-Bench 2.0, SWE-bench, Aider Polyglot) behind one
+          containerized runner, with the agent scaffold (Claude Code, OpenHands, Codex CLI, and
+          more) selected independently of the <code>--model</code> flag [9]. That structure enables
+          matched-model harness comparison, and a 2026 survey names Harbor (with Exgentic) as the
+          first frameworks pushing a unified protocol for general agent assessment [1]. What Harbor
+          does not do: rank efficiency, gate CI on regressions with statistics, or source fresh
+          tasks with reference traces. <strong>Harness-Bench</strong> (2026) is the academic
+          complement: a 6-harness by 8-model factorial over 106 sandboxed tasks (5,194 trajectories)
+          that fixes task, sandbox, budget, timeout, and evaluator while letting each harness keep
+          its native behavior [10]. It is a study rather than an ongoing service, but it is the
+          cleanest matched-model prior art to date.
+        </p>
+        <p>
+          <strong>Aider Polyglot</strong> (225 hard Exercism exercises) is honest about being a
+          model benchmark: one fixed harness, many models, with cost per run displayed [11].
+          <strong>Commit0</strong> (build a library from scratch against a spec and tests) and
+          <strong>RepoBench</strong> (repo-level completion) sit closer to the model end.
+          <strong>SWE-Gym</strong> and <strong>R2E</strong> are environment generators, aimed at
+          training rather than refereeing [12].
+        </p>
+
+        <h2 id="general">3. Survey: general agent benchmarks</h2>
+        <p>
+          <strong>AgentBench</strong> (2023) spans eight environments from OS shells to web shopping
+          [13]. <strong>GAIA</strong> (Meta/HF, 2023) asks 466 tool-requiring questions with
+          unambiguous answers [14]. <strong>WebArena</strong> and <strong>VisualWebArena</strong>
+          grade functional task completion on self-hosted websites [15]; <strong>OSWorld</strong>
+          does the same for 369 tasks on real desktop operating systems [16].
+          <strong>tau-bench</strong> and <strong>tau2-bench</strong> (Sierra) simulate
+          customer-service conversations with an LLM user and domain policies, and contribute the
+          ecosystem's best reliability statistic: pass^k, the probability that an agent succeeds on
+          all k independent attempts, which exposes flakiness a single-run pass rate hides [17].
+          <strong>TheAgentCompany</strong> (CMU, 2024) drops agents into a simulated software
+          company (GitLab, RocketChat, ownCloud) and grades checkpointed long-horizon work with
+          partial credit [18]. <strong>BFCL</strong> (Berkeley) is the standard for function-call
+          correctness, including multi-turn tool use [19]; <strong>ToolBench</strong> covers
+          16,000+ real APIs [20]. <strong>MLE-bench</strong> (OpenAI) uses 75 Kaggle competitions;
+          <strong>CORE-bench</strong> (Princeton) tests computational reproducibility of real
+          papers [21].
+        </p>
+        <p>
+          Two observations. First, nearly all of these publish leaderboards keyed by model, with the
+          benchmark's own reference scaffold underneath: they are model benchmarks with agentic
+          tasks. Second, the exceptions prove the demand: <strong>HAL</strong>, the Holistic Agent
+          Leaderboard (Princeton), re-runs (model, scaffold) pairs across many of the benchmarks
+          above and plots accuracy against cost, an explicit two-axis Pareto view [22]. HAL is the
+          closest thing to a public engine-aware leaderboard. It still is not a tool a team can
+          point at its own agent in its own CI, and cost is its only efficiency axis.
+        </p>
+
+        <h2 id="traces">4. Survey: trace-based evaluation and eval platforms</h2>
+        <p>
+          Trajectory grading has real prior art. <strong>AgentBoard</strong>'s progress rate
+          compares an agent's actual trajectory against an expected one for per-step progress
+          [2, 26]. <strong>T-Eval</strong> decomposes tool use into step-wise next-call alignment
+          [26]. LLM-as-judge trajectory scoring is now a stock feature of eval platforms. What does
+          not exist is what we will call a golden-trace corpus: reference traces from verified,
+          production-merged fixes, published as auditable evidence alongside outcome grades.
+        </p>
+        <p>
+          The observability and eval platforms are where CI actually happens today.
+          <strong>LangSmith</strong>, <strong>Langfuse</strong>, <strong>Braintrust</strong>,
+          <strong>Arize Phoenix</strong>, and <strong>W&amp;B Weave</strong> all offer tracing plus
+          dataset-driven evals, and most can fail a CI job on a metric drop [27].
+          <strong>DeepEval</strong> runs evals as pytest tests; <strong>promptfoo</strong> runs
+          config-driven evals and red-team suites in CI; <strong>OpenAI Evals</strong> seeded the
+          genre [27]. On standards: OpenTelemetry's GenAI semantic conventions are emerging as the
+          de facto wire format for agent traces, and the Model Context Protocol showed that a small
+          interchange spec can reorganize an ecosystem within a year [28]. There is no equivalent
+          interchange standard for benchmark tasks, runs, or verdicts. A 2026 factorial study
+          proposes "Harness Cards", a structured disclosure taxonomy for exactly this reason [3].
+        </p>
+        <p>
+          The platforms' limitation is the mirror image of the benchmarks'. They grade your agent on
+          your dataset with judge-model rubrics: perfect for product regression, but with no
+          held-out verification (the eval data lives in your repo, next to the agent that will be
+          graded on it), no cross-engine comparability, and no shared task corpus, so a score means
+          nothing outside your org.
+        </p>
+
+        <h2 id="practices">5. Best practices: what a credible agent benchmark must do in 2026</h2>
+        <ol>
+          <li><strong>Separate the engine from the model, by construction.</strong> Hold one fixed while varying the other; stamp the run; refuse cross-attribution [1, 3, 10].</li>
+          <li><strong>Held-out verification.</strong> The grader must be absent from the workspace while the agent runs, and immune to anything the agent planted [4].</li>
+          <li><strong>Cost and efficiency as ranked metrics, not footnotes.</strong> Accuracy-cost Pareto curves, plus tokens, wall clock, and, we argue, diff size: no surveyed system ranks the size of the change an agent makes, though every reviewer knows a 4-line fix and a 400-line rewrite are not equal [22, 23, 2].</li>
+          <li><strong>Statistics that respect small n.</strong> Confidence intervals on rates; paired tests for head-to-heads; reliability metrics like pass^k; seeded, reproducible resampling [17, 23].</li>
+          <li><strong>Contamination control.</strong> Frozen sets decay into training data; live sourcing with recorded cutoffs is the credible answer [7].</li>
+          <li><strong>Receipts.</strong> Full transcripts, diffs, manifests, a reproduce command, and disclosure of the harness configuration [3].</li>
+          <li><strong>Run in CI.</strong> A benchmark you run at launch is marketing; a benchmark that fails a pull request is engineering.</li>
+        </ol>
+
+        <h2 id="gap">6. Gap analysis: the four capabilities, and who has them</h2>
+        <div class="tablewrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Closest today</th><th>What's missing</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>(a) Matched-model engine isolation</td>
+              <td>Harbor (structural) [9]; Harness-Bench, factorial study (research) [10, 3]; HAL (reporting) [22]</td>
+              <td>An enforced, stamped property of every published run</td>
+            </tr>
+            <tr>
+              <td>(b) Efficiency grading beyond cost</td>
+              <td>HAL and Aider show cost [22, 11]; tau-bench measures reliability [17]</td>
+              <td>Nobody ranks normalized git-diff size; tokens + wall clock rarely reported together</td>
+            </tr>
+            <tr>
+              <td>(c) CI regression gating with statistics</td>
+              <td>Eval platforms gate CI on judge-scored private datasets [27]</td>
+              <td>No significance-aware gate over held-out, executable verification</td>
+            </tr>
+            <tr>
+              <td>(d) Live tasks, verified fixes, golden traces</td>
+              <td>SWE-bench Live sources fresh issues [7]</td>
+              <td>Nobody promotes fixes upstream, uses maintainer merge as ground truth, or publishes the solving trace</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <p>No system does all four. That is the hole in the landscape.</p>
+
+        <h2 id="arena">7. Arena, and the Agent Benchmark Protocol</h2>
+        <p>
+          <strong>Arena</strong> (<a href="https://github.com/oxageninc/arena">github.com/oxageninc/arena</a>,
+          MIT) is our attempt at the first three capabilities, today: two or more coding agents on
+          the same tasks, same model, same budget, same timeout; held-out verification injected only
+          after the agent exits; Wilson intervals, exact McNemar on paired outcomes, and seeded
+          paired-bootstrap CIs on wall-clock, token, and cost deltas; no blended score; full
+          receipts with a one-line reproduce command; and a CI gate that fails a pull request only
+          when a regression clears interval noise. A Harbor adapter scales the same discipline to
+          SWE-bench Verified with the official containerized verifier [9].
+        </p>
+        <p>
+          The fourth capability needs a standard more than a product. The
+          <a href="/spec/">Agent Benchmark Protocol</a> defines four interchange schemas: a task
+          manifest, a run configuration, a trace format with per-subagent and per-model attribution,
+          and a verdict format with required statistics. On top of them it specifies a live
+          pipeline: a versioned registry of the top 500 open-source GitHub repositories; seeded
+          random draws of real backlog issues; fixes built and submitted upstream under each repo's
+          contribution rules; maintainer merge as verification; and the solving engine's full trace
+          published as a golden trace beside the frozen task. Replays are graded on resolution
+          first, then efficiency in strict order: smaller normalized diff, then fewer tokens, then
+          less wall clock, then lower cost. Golden traces are evidence and study material,
+          deliberately not the rubric, because trajectory-similarity grading punishes better routes
+          to a passing fix [26]. Contamination is handled by construction: tasks are drawn after
+          candidate model cutoffs, stamped, and retired from the scored set 180 days after their fix
+          goes public.
+        </p>
+        <p>
+          Why a protocol rather than another leaderboard: the measurement problem is an
+          interoperability problem. Tasks, runs, traces, and verdicts need to move between task
+          authors, engines, harnesses, and auditors, exactly as context moves between hosts and
+          tools under MCP [28]. Arena is the reference implementation, not the standard; the
+          standard is the four schemas and the conformance suite.
+        </p>
+
+        <h2 id="limits">8. Limitations</h2>
+        <p>
+          This survey characterizes fast-moving systems from their public documentation as of July
+          2026; version specifics will drift. The 7.8x variance ratio comes from one study on one
+          benchmark family and one task size; it needs replication, though its direction agrees with
+          SWE-agent, Agentless, and Harness-Bench [3, 24, 25, 10]. Diff-size ranking is a proxy for
+          surgical precision, not design quality, and is honest only with the normalization and
+          disqualification rules the spec defines. And the author's conflict of interest is real:
+          the reader should treat Section 7 as a proposal to be attacked, with the receipts to
+          attack it.
+        </p>
+
+        <h2 id="refs">References</h2>
+        <ol class="refs">
+          <li>Yehudai et al., <em>Survey on Evaluation of LLM-based Agents</em>, v2 (2026). arxiv.org/abs/2503.16416</li>
+          <li><em>A Survey of AI Agent Evaluation</em> (2025). arxiv.org/abs/2507.21504</li>
+          <li><em>Harness variance factorial study: Harness Cards and the ETCSOVG taxonomy</em> (2026). arxiv.org/abs/2605.23950</li>
+          <li>Jimenez et al., <em>SWE-bench</em> (2023). arxiv.org/abs/2310.06770</li>
+          <li>OpenAI, <em>Introducing SWE-bench Verified</em> (2024). openai.com/index/introducing-swe-bench-verified</li>
+          <li>Scale AI, <em>SWE-bench Pro</em> (2025). github.com/scaleapi/SWE-bench_Pro-os</li>
+          <li><em>SWE-bench Live</em> (2025). swe-bench-live.github.io</li>
+          <li>Terminal-Bench (2025). tbench.ai</li>
+          <li>Harbor Framework (2026). github.com/harbor-framework/harbor</li>
+          <li><em>Harness-Bench</em> (2026). arxiv.org/abs/2605.27922</li>
+          <li>Aider Polyglot leaderboard. aider.chat/docs/leaderboards</li>
+          <li>SWE-Gym · R2E (r2e.dev) · Commit0 (github.com/commit-0/commit0) · RepoBench (2023)</li>
+          <li>Liu et al., <em>AgentBench</em> (2023). arxiv.org/abs/2308.03688</li>
+          <li>Mialon et al., <em>GAIA</em> (2023). arxiv.org/abs/2311.12983</li>
+          <li>Zhou et al., <em>WebArena</em> (2023). arxiv.org/abs/2307.13854</li>
+          <li>Xie et al., <em>OSWorld</em> (2024). arxiv.org/abs/2404.07972</li>
+          <li>Yao et al., <em>tau-bench</em> (2024). arxiv.org/abs/2406.12045 · tau2-bench: github.com/sierra-research/tau2-bench</li>
+          <li>Xu et al., <em>TheAgentCompany</em> (2024). arxiv.org/abs/2412.14161</li>
+          <li>Berkeley Function-Calling Leaderboard. gorilla.cs.berkeley.edu/leaderboard.html</li>
+          <li>Qin et al., <em>ToolLLM/ToolBench</em> (2023). arxiv.org/abs/2307.16789</li>
+          <li>OpenAI, <em>MLE-bench</em> (2024). arxiv.org/abs/2410.07095 · CORE-bench (Princeton, 2024)</li>
+          <li>HAL: Holistic Agent Leaderboard (Princeton). hal.cs.princeton.edu</li>
+          <li>Kapoor et al., <em>AI Agents That Matter</em> (2024). arxiv.org/abs/2407.01502</li>
+          <li>Yang et al., <em>SWE-agent</em> (2024). arxiv.org/abs/2405.15793</li>
+          <li>Xia et al., <em>Agentless</em> (2024). arxiv.org/abs/2407.01489</li>
+          <li>Ma et al., <em>AgentBoard</em> (2024). arxiv.org/abs/2401.13178 · T-Eval (2023). arxiv.org/abs/2312.14033</li>
+          <li>LangSmith · Langfuse · Braintrust · Arize Phoenix · W&amp;B Weave · DeepEval · promptfoo · OpenAI Evals</li>
+          <li>Model Context Protocol (modelcontextprotocol.io) · OpenTelemetry GenAI semantic conventions</li>
+        </ol>
+
+        <p class="muted">
+          The markdown source of this paper lives in the repo at
+          <code>docs/agent-engine-benchmarks-2026.md</code>. Corrections: open an issue with the
+          <code>paper</code> label.
+        </p>
+      </div>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <footer class="site-foot">
+      <span>MIT © Mac Anderson · <a href="https://oxagen.sh">Oxagen</a></span>
+      <span><a href="https://github.com/oxageninc/arena">github.com/oxageninc/arena</a></span>
+    </footer>
+  </div>
+</body>
+</html>

@@ -6,6 +6,8 @@
 
 **Head-to-head benchmarks for agentic coding CLIs — built to survive scrutiny.**
 
+Website: [arena.oxagen.sh](https://arena.oxagen.sh) · Paper: [The State of Agent Benchmarking](docs/agent-engine-benchmarks-2026.md) · Spec: [Agent Benchmark Protocol (draft)](docs/agent-benchmark-protocol.md)
+
 Arena runs two or more coding agents (Claude Code, Gemini CLI, [Oxagen](https://oxagen.sh), [Stella](https://github.com/oxageninc/stella), or your own) on the **same tasks, same model, same budget, same timeout**, grades them with **held-out tests the agent can never see or author**, and reports each metric separately with real statistics and full receipts.
 
 ```bash
