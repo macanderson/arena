@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isRecord } from "./parse.js";
 import { mcnemarExact, median, pairedBootstrapDelta } from "./stats.js";
-import { perAgentSummary } from "./summary.js";
+import { agentKey, perAgentSummary } from "./summary.js";
 import type { RunManifest, TrialResult } from "./types.js";
 
 export function loadRun(runDir: string): {
@@ -31,10 +31,6 @@ export function loadRun(runDir: string): {
     manifest: raw["manifest"] as unknown as RunManifest,
     results: raw["results"] as unknown as TrialResult[],
   };
-}
-
-function agentKey(r: TrialResult): string {
-  return `${r.agent.adapter} (${r.agent.model})`;
 }
 
 function pct(x: number): string {
@@ -53,7 +49,10 @@ function fmtDelta(x: number): string {
 export function generateReport(runDir: string): string {
   const { manifest, results } = loadRun(runDir);
 
-  const keys = [...new Set(results.map(agentKey))];
+  // Aggregation lives in perAgentSummary so the report, the baseline snapshot,
+  // and the regression gate always agree exactly.
+  const summaries = perAgentSummary(results);
+  const keys = summaries.map((s) => s.key);
   const byAgent = new Map<string, TrialResult[]>(
     keys.map((k) => [k, results.filter((r) => agentKey(r) === k)]),
   );
@@ -98,21 +97,19 @@ export function generateReport(runDir: string): string {
   }
 
   // ── Per-agent summary ──
-  // perAgentSummary is the single source of truth shared with the baseline
-  // and the gate, so the report can never disagree with what CI enforces.
-  const summaries = perAgentSummary(results);
   lines.push("## Results by agent", "");
   lines.push(
     "| Agent | Scored trials | Passed | Success rate (95% CI) | Median wall clock | Median tokens (billed) | Median computed cost | Self-reported cost |",
     "|---|---|---|---|---|---|---|---|",
   );
   for (const s of summaries) {
+    const [lo, hi] = s.successCI;
     const wall =
       s.medianWallClockSeconds === null ? "—" : `${s.medianWallClockSeconds.toFixed(1)}s`;
     const toks =
       s.medianTotalTokens === null ? "—" : Math.round(s.medianTotalTokens).toLocaleString();
     lines.push(
-      `| ${s.key} | ${String(s.scoredTrials)} | ${String(s.passed)} | ${pct(s.successRate)} (${pct(s.successCI[0])}–${pct(s.successCI[1])}) | ${wall} | ${toks} | ${fmtUsd(s.medianComputedCost)} | ${fmtUsd(s.medianAgentReportedCost)} |`,
+      `| ${s.key} | ${String(s.scoredTrials)} | ${String(s.passed)} | ${pct(s.successRate)} (${pct(lo)}–${pct(hi)}) | ${wall} | ${toks} | ${fmtUsd(s.medianComputedCost)} | ${fmtUsd(s.medianAgentReportedCost)} |`,
     );
   }
   lines.push("");

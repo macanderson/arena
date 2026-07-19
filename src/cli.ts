@@ -55,7 +55,7 @@ switch (command) {
     cmdReport(rest);
     break;
   case "verify":
-    cmdVerify(rest);
+    await cmdVerify(rest);
     break;
   case "baseline":
     cmdBaseline(rest);
@@ -181,15 +181,14 @@ async function cmdRun(argv: string[]): Promise<void> {
     }
   }
 
+  const budgetUsd = values.budget !== undefined ? numFlag("budget", values.budget) : undefined;
   const config = {
     agents,
     tasks,
-    trials: numericFlag("trials", values.trials, 3, { integer: true, min: 1 }),
-    ...(values.budget !== undefined
-      ? { budgetUsd: numericFlag("budget", values.budget, 0, { min: 0 }) }
-      : {}),
-    timeoutSeconds: numericFlag("timeout", values.timeout, 600, { integer: true, min: 1 }),
-    seed: numericFlag("seed", values.seed, 42, { integer: true, min: 0 }),
+    trials: intFlag("trials", values.trials, 3),
+    ...(budgetUsd !== undefined ? { budgetUsd } : {}),
+    timeoutSeconds: intFlag("timeout", values.timeout, 600),
+    seed: intFlag("seed", values.seed, 42, 0),
     outDir: resolve(values.out ?? "results"),
   };
 
@@ -199,26 +198,22 @@ async function cmdRun(argv: string[]): Promise<void> {
   console.log(`\nRun complete. Report: ${join(runDir, "report.md")}`);
 }
 
-/**
- * Parse a numeric flag strictly. `parseInt`-style prefix parsing is rejected
- * ("10m" is an error, not 10) and NaN never leaks into the run config, where
- * it would silently produce instant timeouts or an empty "successful" run.
- */
-function numericFlag(
-  flag: string,
-  raw: string | undefined,
-  fallback: number,
-  opts: { integer?: boolean; min?: number } = {},
-): number {
+/** Parse an integer CLI flag; reject garbage instead of silently running with NaN. */
+function intFlag(name: string, raw: string | undefined, fallback: number, min = 1): number {
   if (raw === undefined) return fallback;
-  const n = Number(raw);
-  const wholeOk = opts.integer !== true || Number.isInteger(n);
-  const minOk = opts.min === undefined || n >= opts.min;
-  if (!Number.isFinite(n) || !wholeOk || !minOk) {
-    console.error(
-      `--${flag} must be ${opts.integer ? "an integer" : "a number"}` +
-        `${opts.min !== undefined ? ` >= ${String(opts.min)}` : ""}, got "${raw}"`,
-    );
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < min || String(n) !== raw.trim()) {
+    console.error(`--${name} must be an integer ≥ ${String(min)}, got "${raw}"`);
+    process.exit(1);
+  }
+  return n;
+}
+
+/** Parse a positive numeric CLI flag. */
+function numFlag(name: string, raw: string): number {
+  const n = Number.parseFloat(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    console.error(`--${name} must be a positive number, got "${raw}"`);
     process.exit(1);
   }
   return n;
@@ -240,7 +235,7 @@ function cmdReport(argv: string[]): void {
  * workspace (no tautological tests) and PASS against the reference solution
  * (the task is actually solvable). CI runs this on every push.
  */
-function cmdVerify(argv: string[]): void {
+async function cmdVerify(argv: string[]): Promise<void> {
   const all = loadTasks(TASK_ROOT);
   if (argv.length > 0) {
     // An id that matches nothing must fail loudly: CI configured with a
@@ -258,12 +253,12 @@ function cmdVerify(argv: string[]): void {
     const pristineDir = mkdtempSync(join(tmpdir(), "arena-audit-"));
     const solvedDir = mkdtempSync(join(tmpdir(), "arena-audit-"));
     try {
-      seedWorkspace(task, pristineDir);
-      const pristine = runVerification(task, pristineDir);
+      await seedWorkspace(task, pristineDir);
+      const pristine = await runVerification(task, pristineDir);
 
-      seedWorkspace(task, solvedDir);
-      applySolution(task, solvedDir);
-      const solved = runVerification(task, solvedDir);
+      await seedWorkspace(task, solvedDir);
+      await applySolution(task, solvedDir);
+      const solved = await runVerification(task, solvedDir);
 
       const ok = !pristine.passed && solved.passed;
       if (!ok) failures++;

@@ -19,6 +19,9 @@ export interface AdapterRunArgs {
   budgetUsd: number | undefined;
   timeoutSeconds: number;
   workDir: string;
+  /** Task fixture directory. Only the in-process mock may read it; real CLIs
+   * must never see the fixture (it contains the held-out tests). */
+  taskDir: string;
 }
 
 export interface ExecOutcome {
@@ -71,17 +74,22 @@ export abstract class Adapter {
     }
   }
 
+  private cachedVersion: string | undefined;
+
   version(): string {
-    try {
-      return execFileSync(this.bin(), ["--version"], {
-        encoding: "utf8",
-        timeout: 10_000,
-      })
-        .trim()
-        .split("\n")[0] as string;
-    } catch {
-      return "unknown";
+    if (this.cachedVersion === undefined) {
+      try {
+        this.cachedVersion = execFileSync(this.bin(), ["--version"], {
+          encoding: "utf8",
+          timeout: 10_000,
+        })
+          .trim()
+          .split("\n")[0] as string;
+      } catch {
+        this.cachedVersion = "unknown";
+      }
     }
+    return this.cachedVersion;
   }
 
   /**
@@ -97,12 +105,15 @@ export abstract class Adapter {
    */
   execute(args: AdapterRunArgs): Promise<ExecOutcome> {
     return new Promise((resolve) => {
-      const posix = process.platform !== "win32";
+      // detached: the agent gets its own process group, so a timeout kill
+      // reaches the whole tree — agents routinely spawn test runners and
+      // shells that would otherwise survive and hold the stdio pipes open.
+      const detached = process.platform !== "win32";
       const child = spawn(this.bin(), this.buildArgs(args), {
         cwd: args.workDir,
         env: { ...process.env, ...this.env(args) },
         stdio: ["ignore", "pipe", "pipe"],
-        detached: posix,
+        detached,
       });
 
       let stdout = "";
@@ -112,12 +123,12 @@ export abstract class Adapter {
       let drainTimer: NodeJS.Timeout | undefined;
 
       const killTree = (): void => {
-        if (posix && child.pid !== undefined) {
+        if (detached && child.pid !== undefined) {
           try {
             process.kill(-child.pid, "SIGKILL");
             return;
           } catch {
-            // Process group already gone — fall through to the direct kill.
+            // Process group already gone — fall through to a direct kill.
           }
         }
         child.kill("SIGKILL");
@@ -154,7 +165,9 @@ export abstract class Adapter {
       // "close" waits for the stdio pipes to drain, which an orphaned
       // grandchild that inherited them can prevent forever. "exit" is the
       // authoritative signal: reap anything left in the process group, then
-      // give the pipes a short grace period to flush before settling.
+      // give the pipes a short grace period to flush before settling. The
+      // grace timer is NOT unref'd: it must keep the event loop alive so the
+      // promise always settles even if "close" never fires.
       child.on("exit", (code) => {
         clearTimeout(timer);
         killTree();

@@ -15,15 +15,15 @@
       <nav>
         <a href="/paper/">Paper</a>
         <a href="/spec/" aria-current="page">Spec</a>
-        <a href="https://github.com/oxageninc/arena/blob/main/METHODOLOGY.md">Methodology</a>
-        <a href="https://github.com/oxageninc/arena">GitHub</a>
+        <a href="https://github.com/macanderson/arena/blob/main/METHODOLOGY.md">Methodology</a>
+        <a href="https://github.com/macanderson/arena">GitHub</a>
       </nav>
     </header>
 
     <article class="article">
       <p class="kicker">Design spec · Draft 0.1 · July 2026</p>
       <h1>Agent Benchmark Protocol</h1>
-      <p class="byline">Oxagen · reference implementation: <a href="https://github.com/oxageninc/arena">Arena</a> · status: draft for public comment</p>
+      <p class="byline">Oxagen · reference implementation: <a href="https://github.com/macanderson/arena">Arena</a> · status: draft for public comment</p>
 
       <div class="abstract">
         <strong>An open standard for benchmarking agent engines:</strong> the harness, prompts,
@@ -83,7 +83,7 @@
           graders, and auditors), not a single dataset or a single leaderboard. Datasets and
           leaderboards are built on top of ABP; they are products, and ABP is the plumbing. It also
           keeps the family resemblance with the Open Context Protocol, which Oxagen authored and
-          built <a href="https://github.com/oxageninc/stella">Stella</a> on.
+          built <a href="https://github.com/macanderson/stella">Stella</a> on.
         </p>
         <p>
           One naming caution, stated openly: "protocol" sets an expectation of wire-level rigor.
@@ -186,7 +186,7 @@
   },
   "prompt": "…full task statement given to every engine…",
   "environment": {
-    "image": "ghcr.io/oxageninc/abp-node:22",
+    "image": "ghcr.io/macanderson/abp-node:22",
     "setup": ["pnpm install --frozen-lockfile"]
   },
   "verification": {
@@ -333,7 +333,7 @@
 
         <p class="muted">
           Feedback: open an issue at
-          <a href="https://github.com/oxageninc/arena/issues">github.com/oxageninc/arena</a> with the
+          <a href="https://github.com/macanderson/arena/issues">github.com/macanderson/arena</a> with the
           <code>abp</code> label. The markdown source of this spec lives in the repo at
           <code>docs/agent-benchmark-protocol.md</code>.
         </p>
@@ -344,7 +344,7 @@
   <div class="wrap">
     <footer class="site-foot">
       <span>MIT © Mac Anderson · <a href="https://oxagen.sh">Oxagen</a></span>
-      <span><a href="https://github.com/oxageninc/arena">github.com/oxageninc/arena</a></span>
+      <span><a href="https://github.com/macanderson/arena">github.com/macanderson/arena</a></span>
     </footer>
   </div>
 </body>

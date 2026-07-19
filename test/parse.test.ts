@@ -59,6 +59,27 @@ describe("parseJsonEnvelope", () => {
       n: 9,
     });
   });
+
+  it("parses a pretty-printed (multi-line) envelope, as gemini-cli emits", () => {
+    const stdout = [
+      "Loaded config",
+      JSON.stringify(
+        { type: "result", stats: { models: { m: { tokens: { prompt: 10 } } } } },
+        null,
+        2,
+      ),
+      "done",
+    ].join("\n");
+    expect(parseJsonEnvelope(stdout)).toEqual({
+      type: "result",
+      stats: { models: { m: { tokens: { prompt: 10 } } } },
+    });
+  });
+
+  it("is not fooled by braces inside JSON strings", () => {
+    const stdout = JSON.stringify({ type: "result", note: 'a "}" inside {braces}' }, null, 2);
+    expect(parseJsonEnvelope(stdout)).toEqual({ type: "result", note: 'a "}" inside {braces}' });
+  });
 });
 
 describe("num / countOf", () => {

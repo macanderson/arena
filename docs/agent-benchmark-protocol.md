@@ -4,7 +4,7 @@
 
 An open standard for benchmarking agent engines: the harness, prompts, tools, and loop an agent ships with, measured separately from the model it happens to run on.
 
-Status: draft for public comment. The reference implementation is [Arena](https://github.com/oxageninc/arena). Nothing here is final, including the name.
+Status: draft for public comment. The reference implementation is [Arena](https://github.com/macanderson/arena). Nothing here is final, including the name.
 
 ---
 
@@ -24,7 +24,7 @@ ABP standardizes the four interfaces that make honest engine comparison possible
 
 ## 2. Why "protocol"
 
-We considered "standard", "format", "spec", and "benchmark". Protocol is the right word for the same reason it was right for the Model Context Protocol: the deliverable is a set of interchange contracts between independent parties (task authors, engines, harnesses, graders, and auditors), not a single dataset or a single leaderboard. Datasets and leaderboards are built on top of ABP; they are products, and ABP is the plumbing. It also keeps the family resemblance with the Open Context Protocol, which Oxagen authored and built [Stella](https://github.com/oxageninc/stella) on.
+We considered "standard", "format", "spec", and "benchmark". Protocol is the right word for the same reason it was right for the Model Context Protocol: the deliverable is a set of interchange contracts between independent parties (task authors, engines, harnesses, graders, and auditors), not a single dataset or a single leaderboard. Datasets and leaderboards are built on top of ABP; they are products, and ABP is the plumbing. It also keeps the family resemblance with the Open Context Protocol, which Oxagen authored and built [Stella](https://github.com/macanderson/stella) on.
 
 One naming caution, stated openly: "protocol" sets an expectation of wire-level rigor. This draft earns that word only in Sections 5 through 8, where the schemas live. If the community reads those sections and concludes the word oversells, the fallback name is the Agent Benchmark Format (ABF). The acronym to protect is ABP, one syllable per letter, easy to say in CI logs: `abp gate failed`.
 
@@ -94,7 +94,7 @@ Live sourcing is also the contamination story. Issues are selected from the curr
   },
   "prompt": "…full task statement given to every engine…",
   "environment": {
-    "image": "ghcr.io/oxageninc/abp-node:22",   // container digest-pinned
+    "image": "ghcr.io/macanderson/abp-node:22",   // container digest-pinned
     "setup": ["pnpm install --frozen-lockfile"]
   },
   "verification": {
@@ -224,4 +224,4 @@ The gate semantics are Arena's, generalized: fail on a statistically significant
 
 ---
 
-*Feedback: open an issue at [github.com/oxageninc/arena](https://github.com/oxageninc/arena/issues) with the `abp` label.*
+*Feedback: open an issue at [github.com/macanderson/arena](https://github.com/macanderson/arena/issues) with the `abp` label.*
