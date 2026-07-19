@@ -99,6 +99,9 @@ export async function executeRun(
         const result = await runOne(task, spec, adapter, trial, config, runId, runDir, pricing);
         results.push(result);
         writeFileSync(join(runDir, "trials", `${result.id}.json`), JSON.stringify(result, null, 2));
+        // Rewritten after every trial so a mid-run crash still leaves an
+        // aggregatable results.json behind.
+        writeFileSync(join(runDir, "results.json"), JSON.stringify({ manifest, results }, null, 2));
         const mark =
           result.outcome === "passed" ? "✅" : result.outcome === "agent-error" ? "⚠️" : "❌";
         log(
@@ -108,8 +111,6 @@ export async function executeRun(
       }
     }
   }
-
-  writeFileSync(join(runDir, "results.json"), JSON.stringify({ manifest, results }, null, 2));
 
   return { runDir, manifest, results };
 }
@@ -125,12 +126,14 @@ async function runOne(
   pricing: PricingTable,
 ): Promise<TrialResult> {
   const workDir = join(tmpdir(), `arena-${sanitizeSegment(task.id)}-${randomUUID()}`);
-  const startedAt = new Date();
   const id = `${task.id}-${spec.adapter}-${sanitizeSegment(spec.model)}-t${trial}`;
+  let startedAt = new Date();
 
   try {
     await seedWorkspace(task, workDir);
 
+    // Started only now: wall clock measures spawn-to-exit, not harness seeding.
+    startedAt = new Date();
     const exec = await adapter.execute({
       prompt: buildPrompt(task),
       model: spec.model,
@@ -143,14 +146,21 @@ async function runOne(
     const finishedAt = new Date();
     const wallClockSeconds = (finishedAt.getTime() - startedAt.getTime()) / 1000;
 
-    const diff = await collectDiff(workDir);
+    const diffRaw = await collectDiff(workDir);
+    const diff = diffRaw ?? "";
     const envelope = adapter.parseEnvelope(exec.stdout);
 
     // Invocation-level failure: the agent never actually ran (bad flags,
-    // missing binary, immediate non-zero exit with no work product).
+    // missing binary, immediate non-zero exit with no work product). A null
+    // diff means git failed — the diff is unknown, not empty, so it can never
+    // count as evidence that the agent did nothing.
     const invocationFailure =
       exec.spawnError !== undefined ||
-      (exec.exitCode !== 0 && !exec.timedOut && diff.length === 0 && envelope.tokens.total === 0);
+      (exec.exitCode !== 0 &&
+        !exec.timedOut &&
+        diffRaw !== null &&
+        diff.length === 0 &&
+        envelope.tokens.total === 0);
 
     let outcome: Outcome;
     let verify = { passed: false, output: "" };
@@ -231,6 +241,57 @@ async function runOne(
       transcriptPath,
       diffPath,
       ...(errorText !== undefined ? { error: errorText } : {}),
+    };
+  } catch (error) {
+    // Per-trial containment: a harness-side failure (git error, FS hiccup,
+    // missing fixture) scores this one trial `agent-error` — consistent with
+    // the project rule that harness failures never read as the agent losing —
+    // instead of aborting the whole run and losing every completed trial.
+    const finishedAt = new Date();
+    const message = error instanceof Error ? error.message : String(error);
+    const transcriptPath = join("transcripts", `${id}.txt`);
+    const diffPath = join("diffs", `${id}.patch`);
+    try {
+      writeFileSync(join(runDir, transcriptPath), `# ${id}\n# harness error\n\n${message}\n`);
+      writeFileSync(join(runDir, diffPath), "");
+    } catch {
+      // Receipts are best-effort here; the error itself is preserved below.
+    }
+    return {
+      id,
+      taskId: task.id,
+      trial,
+      agent: {
+        adapter: spec.adapter,
+        model: spec.model,
+        resolvedModel: adapter.resolveModel(spec.model),
+        version: adapter.version(),
+        bin: adapter.bin(),
+      },
+      outcome: "agent-error",
+      verify: { passed: false, output: "" },
+      timing: {
+        wallClockSeconds: (finishedAt.getTime() - startedAt.getTime()) / 1000,
+        agentReportedSeconds: null,
+      },
+      tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      cost: { computedUsd: null, agentReportedUsd: null, pricingModel: null },
+      activity: {
+        toolCalls: null,
+        iterations: null,
+        filesTouched: 0,
+        linesAdded: 0,
+        linesRemoved: 0,
+        diffBytes: 0,
+      },
+      provenance: {
+        runId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+      },
+      transcriptPath,
+      diffPath,
+      error: `harness error: ${message}`,
     };
   } finally {
     rmSync(workDir, { recursive: true, force: true });

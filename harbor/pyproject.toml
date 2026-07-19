@@ -20,7 +20,8 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
-# Pinned to the 0.6.x line the adapter is built and tested against.
+# Built and tested against 0.6.x; the range admits later 0.x releases the
+# spec-driven surface has stayed compatible with. Tighten if Harbor breaks API.
 dependencies = [
   "harbor>=0.6,<0.20",
 ]

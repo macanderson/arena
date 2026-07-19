@@ -8,9 +8,13 @@
  * `--permission-mode acceptEdits` (edits auto-approved, arbitrary shell not).
  *
  * JSON output shape (gemini-cli ≥ 0.x): { response, stats: { models: {
- *   "<model>": { tokens: { prompt, candidates, cached, total, ... } } } } }
+ *   "<model>": { tokens: { prompt, candidates, thoughts, tool, cached,
+ *   total, ... } } } } }
  * Multiple model entries are summed. Gemini's `prompt` count INCLUDES cached
- * tokens, so normalized input = prompt − cached.
+ * tokens, so normalized input = prompt + tool − cached. `thoughts` (reasoning)
+ * tokens are billed as output, so normalized output = candidates + thoughts —
+ * dropping them would systematically understate Gemini vs. agents whose
+ * output counts already include reasoning.
  *
  * NOTE: gemini-cli flags/envelope evolve quickly; `arena doctor` surfaces the
  * installed version, and this adapter is covered by unit tests over a captured
@@ -52,6 +56,8 @@ export class GeminiAdapter extends Adapter {
 
     let prompt = 0;
     let candidates = 0;
+    let thoughts = 0;
+    let tool = 0;
     let cached = 0;
     let toolCalls: number | null = null;
     for (const entry of Object.values(models)) {
@@ -59,6 +65,8 @@ export class GeminiAdapter extends Adapter {
       const tokens = isRecord(entry["tokens"]) ? entry["tokens"] : {};
       prompt += num(tokens["prompt"]);
       candidates += num(tokens["candidates"]);
+      thoughts += num(tokens["thoughts"]);
+      tool += num(tokens["tool"]);
       cached += num(tokens["cached"]);
     }
     const tools = isRecord(stats["tools"]) ? stats["tools"] : {};
@@ -70,8 +78,8 @@ export class GeminiAdapter extends Adapter {
     const cacheRead = Math.min(cached, prompt);
     return {
       tokens: totalize({
-        input: prompt - cacheRead,
-        output: candidates,
+        input: prompt + tool - cacheRead,
+        output: candidates + thoughts,
         cacheRead,
         cacheWrite: 0,
       }),

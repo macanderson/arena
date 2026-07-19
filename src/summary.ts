@@ -19,6 +19,8 @@ export interface AgentSummary {
   /** Trials excluding `agent-error`. */
   scoredTrials: number;
   errorTrials: number;
+  /** Scored trials whose envelope had no parseable token usage (total = 0). */
+  unmeteredTrials: number;
   passed: number;
   /** passed / scoredTrials (0 when nothing scored). */
   successRate: number;
@@ -58,7 +60,13 @@ export function perAgentSummary(results: TrialResult[]): AgentSummary[] {
     const scored = all.filter((r) => r.outcome !== "agent-error");
     const passed = scored.filter((r) => r.outcome === "passed").length;
     const first = all[0] as TrialResult;
-    const costs = scored.map((r) => r.cost.computedUsd).filter((c): c is number => c !== null);
+    // A scored trial with zero total tokens means the envelope was
+    // unparseable (timeout kill mid-print, envelope drift), not that the
+    // agent used zero tokens. Excluding them keeps token/cost medians — and
+    // the drift gate built on them — from being dragged toward zero by parse
+    // failures.
+    const metered = scored.filter((r) => r.tokens.total > 0);
+    const costs = metered.map((r) => r.cost.computedUsd).filter((c): c is number => c !== null);
     const selfCosts = scored
       .map((r) => r.cost.agentReportedUsd)
       .filter((c): c is number => c !== null);
@@ -68,11 +76,12 @@ export function perAgentSummary(results: TrialResult[]): AgentSummary[] {
       model: first.agent.model,
       scoredTrials: scored.length,
       errorTrials: all.length - scored.length,
+      unmeteredTrials: scored.length - metered.length,
       passed,
       successRate: scored.length ? passed / scored.length : 0,
       successCI: wilsonInterval(passed, scored.length),
       medianWallClockSeconds: medianOrNull(scored.map((r) => r.timing.wallClockSeconds)),
-      medianTotalTokens: medianOrNull(scored.map((r) => r.tokens.total)),
+      medianTotalTokens: medianOrNull(metered.map((r) => r.tokens.total)),
       medianComputedCost: medianOrNull(costs),
       medianAgentReportedCost: medianOrNull(selfCosts),
     };
