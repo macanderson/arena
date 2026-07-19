@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arena: benchmark the agent engine, not the model</title>
+  <meta name="description" content="Arena runs coding agents head-to-head on the same model, budget, and timeout, grades them with held-out tests, and gates your CI so agent quality never slips silently." />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%8F%B1%3C/text%3E%3C/svg%3E" />
+  <meta property="og:title" content="Arena: benchmark the agent engine, not the model" />
+  <meta property="og:description" content="Head-to-head benchmarks for agentic coding CLIs. Held-out verification, matched configs, real statistics, full receipts, and a CI regression gate." />
+  <meta property="og:url" content="https://arena.oxagen.sh" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-head">
+      <a class="brand" href="/">arena<span>.oxagen.sh</span></a>
+      <nav>
+        <a href="/paper/">Paper</a>
+        <a href="/spec/">Spec</a>
+        <a href="https://github.com/oxageninc/arena/blob/main/METHODOLOGY.md">Methodology</a>
+        <a href="https://github.com/oxageninc/arena">GitHub</a>
+      </nav>
+    </header>
+  </div>
+
+  <main>
+    <div class="wrap">
+      <div class="hero">
+        <h1>Your agent got worse last Tuesday. Nobody noticed.</h1>
+        <p class="sub">
+          Every leaderboard measures the model. Nobody measures <strong>your agent engine</strong>:
+          the harness, the prompts, the tools, the loop you actually ship. Arena runs coding agents
+          head-to-head on the <strong>same model, same budget, same timeout</strong>, grades them with
+          <strong>held-out tests</strong> they can never see, and reports each metric separately with
+          real statistics and full receipts.
+        </p>
+        <div class="cta-row">
+          <a class="btn solid" href="https://github.com/oxageninc/arena">git clone oxageninc/arena</a>
+          <a class="btn ghost" href="/paper/">Read the paper</a>
+          <a class="btn ghost" href="/spec/">Read the spec</a>
+        </div>
+
+        <div class="scoreboard" role="img" aria-label="Example Arena report: two agents compared on the same model with confidence intervals and a McNemar p-value">
+          <div class="bar">
+            <span class="cmd">arena run --agents oxagen,claude-code --model anthropic/claude-sonnet-5 --trials 3</span>
+            <span>matchedModels: true</span>
+          </div>
+          <div class="sb-body">
+            <div class="sb-row">
+              <span class="name">oxagen</span>
+              <span class="ci"><span class="band" style="left:71%;width:21%"></span><span class="pt" style="left:84%"></span></span>
+              <span class="rate">84% <small>Wilson 95% [71, 92]</small></span>
+            </div>
+            <div class="sb-row">
+              <span class="name">claude-code</span>
+              <span class="ci"><span class="band" style="left:64%;width:24%"></span><span class="pt" style="left:78%"></span></span>
+              <span class="rate">78% <small>Wilson 95% [64, 88]</small></span>
+            </div>
+          </div>
+          <div class="sb-foot">
+            <span class="p">exact McNemar p = 0.041 on paired trials</span>
+            <span>receipts: manifest · transcripts · diffs · reproduce command</span>
+          </div>
+        </div>
+        <p class="sb-note">Report format shown with example data. Every real report carries its own intervals, p-values, and raw run directory.</p>
+      </div>
+
+      <section id="why">
+        <p class="eyebrow">The problem</p>
+        <h2>Model benchmarks answer a question you are not asking</h2>
+        <div class="prose">
+          <p>
+            When your coding agent gets better or worse, the model is usually not what changed.
+            You changed a system prompt, added a tool, reworked the planning loop, or bumped a
+            dependency. Model leaderboards cannot see any of that. They hold the harness fixed
+            and vary the model. Your job is the opposite: the model is a config value, and the
+            engine is the product.
+          </p>
+          <p>
+            Arena isolates the engine. Two or more agents, one model, one budget, one timeout,
+            the same tasks. If the numbers differ, the harness is the reason. That is the
+            comparison that tells you whether your last sprint helped, and the one no public
+            leaderboard runs for you.
+          </p>
+        </div>
+      </section>
+
+      <section id="scrutiny">
+        <p class="eyebrow">Trust</p>
+        <h2>Built to survive skeptical reading</h2>
+        <div class="defense">
+          <div class="row">
+            <div class="attack">The agent graded itself</div>
+            <div class="answer"><strong>Held-out verification.</strong> Tests live outside the workspace, are copied in only after the agent exits, and anything planted at the verify path is deleted first. CI proves every task fails pristine and passes the reference solution.</div>
+          </div>
+          <div class="row">
+            <div class="attack">Different models or budgets</div>
+            <div class="answer"><strong>One config drives every agent.</strong> Unmatched runs are stamped <code>matchedModels: false</code> and the report leads with a warning banner.</div>
+          </div>
+          <div class="row">
+            <div class="attack">Your harness broke the competitor</div>
+            <div class="answer"><strong>Harness failures are excluded.</strong> A CLI that cannot be invoked scores <code>agent-error</code> and is removed from every comparison. It never counts as the agent losing.</div>
+          </div>
+          <div class="row">
+            <div class="attack">n = 1, no stats</div>
+            <div class="answer"><strong>Real statistics.</strong> Wilson 95% intervals, exact McNemar on paired outcomes, seeded paired-bootstrap CIs on speed, tokens, and cost. Same data plus same seed gives the same report, bit for bit.</div>
+          </div>
+          <div class="row">
+            <div class="attack">Where is the raw data</div>
+            <div class="answer"><strong>Full receipts.</strong> Every trial writes its transcript, workspace diff, and a manifest with CLI versions, models, host, seed, and a one-line reproduce command.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="metrics">
+        <p class="eyebrow">Measurement</p>
+        <h2>Four metrics, never blended</h2>
+        <p>
+          A single blended score hides the tradeoff you care about. Arena reports each metric
+          separately, with its own interval, and refuses to average them.
+        </p>
+        <div class="metrics">
+          <div class="metric">
+            <div class="k">accuracy</div>
+            <div class="v">Held-out tests pass. Wilson 95% interval on every rate.</div>
+          </div>
+          <div class="metric">
+            <div class="k">speed</div>
+            <div class="v">Wall-clock, harness-measured. Medians with bootstrap CIs.</div>
+          </div>
+          <div class="metric">
+            <div class="k">tokens</div>
+            <div class="v">Normalized per adapter. Cache reads never inflate input.</div>
+          </div>
+          <div class="metric">
+            <div class="k">cost</div>
+            <div class="v">One shared price table, or no number at all. Never a guess.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="gate">
+        <p class="eyebrow">CI integration</p>
+        <h2>The regression gate: a tripwire for agent quality</h2>
+        <div class="prose">
+          <p>
+            Benchmarks are not only for bragging. Snapshot a good run as a baseline, commit it,
+            and fail CI the day a change makes your agent less accurate, slower, or more
+            expensive. With <code>--require-significant</code>, a drop only fails once it clears
+            95% interval noise, so small samples do not cry wolf.
+          </p>
+        </div>
+        <pre class="shell"><span class="c"># establish a baseline once, commit it</span>
+pnpm arena run --agents mine --model anthropic/claude-sonnet-5 --trials 5
+pnpm arena baseline save results/run-…        <span class="c"># writes arena-baseline.json</span>
+
+<span class="c"># in CI: rerun and gate. non-zero exit = regression</span>
+pnpm arena run --agents mine --model anthropic/claude-sonnet-5 --trials 5
+pnpm arena gate results/run-… <span class="y">--require-significant</span></pre>
+      </section>
+
+      <section id="read">
+        <p class="eyebrow">Go deeper</p>
+        <h2>The paper, the spec, and the methodology</h2>
+        <div class="docs">
+          <a class="doc-card" href="/paper/">
+            <div class="t">The State of Agent Benchmarking</div>
+            <div class="d">A survey of the 2026 landscape: what exists, what it measures, and why almost none of it evaluates the engine you ship.</div>
+            <div class="m">research paper</div>
+          </a>
+          <a class="doc-card" href="/spec/">
+            <div class="t">Agent Benchmark Protocol</div>
+            <div class="d">A draft open standard: live tasks from real repos, verified fixes, golden traces, and grading any engine can plug into.</div>
+            <div class="m">design spec · draft</div>
+          </a>
+          <a class="doc-card" href="https://github.com/oxageninc/arena/blob/main/METHODOLOGY.md">
+            <div class="t">Methodology</div>
+            <div class="d">The contract behind any number Arena produces, including what it takes to publish an A-beats-B claim.</div>
+            <div class="m">github.com/oxageninc/arena</div>
+          </a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="wrap">
+    <footer class="site-foot">
+      <span>MIT © Mac Anderson · <a href="https://oxagen.sh">Oxagen</a></span>
+      <span><a href="https://github.com/oxageninc/arena">github.com/oxageninc/arena</a></span>
+    </footer>
+  </div>
+</body>
+</html>

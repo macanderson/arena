@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Benchmark Protocol (ABP) · Draft 0.1</title>
+  <meta name="description" content="A draft open standard for benchmarking agent engines: task manifests, golden traces, verdicts, and a CI gate any engine can plug into." />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%8F%B1%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-head">
+      <a class="brand" href="/">arena<span>.oxagen.sh</span></a>
+      <nav>
+        <a href="/paper/">Paper</a>
+        <a href="/spec/" aria-current="page">Spec</a>
+        <a href="https://github.com/oxageninc/arena/blob/main/METHODOLOGY.md">Methodology</a>
+        <a href="https://github.com/oxageninc/arena">GitHub</a>
+      </nav>
+    </header>
+
+    <article class="article">
+      <p class="kicker">Design spec · Draft 0.1 · July 2026</p>
+      <h1>Agent Benchmark Protocol</h1>
+      <p class="byline">Oxagen · reference implementation: <a href="https://github.com/oxageninc/arena">Arena</a> · status: draft for public comment</p>
+
+      <div class="abstract">
+        <strong>An open standard for benchmarking agent engines:</strong> the harness, prompts,
+        tools, and loop an agent ships with, measured separately from the model it happens to run
+        on. ABP standardizes four interchange contracts (task manifest, run config, trace, and
+        verdict) plus a live task pipeline in which verified fixes to real GitHub issues become
+        golden traces. Nothing here is final, including the name.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <div class="t">Contents</div>
+        <ol>
+          <li><a href="#problem">The problem this standard exists to solve</a></li>
+          <li><a href="#why-protocol">Why "protocol"</a></li>
+          <li><a href="#principles">Design principles</a></li>
+          <li><a href="#pipeline">The live task pipeline</a></li>
+          <li><a href="#task">Task manifest (abp-task/v1)</a></li>
+          <li><a href="#trace">Trace format (abp-trace/v1)</a></li>
+          <li><a href="#run">Run configuration (abp-run/v1)</a></li>
+          <li><a href="#verdict">Verdict format (abp-verdict/v1)</a></li>
+          <li><a href="#conformance">Conformance levels</a></li>
+          <li><a href="#ci">CI integration</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+          <li><a href="#open">Open questions</a></li>
+        </ol>
+      </nav>
+
+      <div class="article-body">
+        <h2 id="problem">1. The problem this standard exists to solve</h2>
+        <p>
+          Teams that ship agents change their engine every week: a new system prompt, a new tool, a
+          reworked planning loop, a different context strategy. None of those changes show up on a
+          model leaderboard, because model leaderboards hold the harness fixed and vary the model.
+          The people who build agent engines have the opposite need: hold the model fixed and vary
+          the engine.
+        </p>
+        <p>Today that comparison is nearly impossible to run honestly:</p>
+        <ol>
+          <li>Every harness invokes agents differently, so "same task" rarely means same prompt, same budget, same timeout, or same autonomy level.</li>
+          <li>Every harness logs differently, so traces cannot be compared across engines.</li>
+          <li>Every harness grades differently, and most let the agent's own output influence the grade.</li>
+          <li>Almost no benchmark measures efficiency. Two agents that both fix a bug are scored as equals even when one shipped a 4-line patch in 90 seconds and the other shipped a 400-line rewrite in 20 minutes.</li>
+          <li>Almost no benchmark runs in CI. A benchmark you run once for a launch tweet cannot catch the Tuesday your agent quietly got worse.</li>
+        </ol>
+        <p>
+          ABP standardizes the four interfaces that make honest engine comparison possible: how a
+          task is packaged, how a run is configured, how a trace is recorded, and how a verdict is
+          reported. Any engine that speaks these formats can be benchmarked by any conforming
+          harness, and any harness can be audited by anyone.
+        </p>
+
+        <h2 id="why-protocol">2. Why "protocol"</h2>
+        <p>
+          We considered "standard", "format", "spec", and "benchmark". Protocol is the right word
+          for the same reason it was right for the Model Context Protocol: the deliverable is a set
+          of interchange contracts between independent parties (task authors, engines, harnesses,
+          graders, and auditors), not a single dataset or a single leaderboard. Datasets and
+          leaderboards are built on top of ABP; they are products, and ABP is the plumbing. It also
+          keeps the family resemblance with the Open Context Protocol, which Oxagen authored and
+          built <a href="https://github.com/oxageninc/stella">Stella</a> on.
+        </p>
+        <p>
+          One naming caution, stated openly: "protocol" sets an expectation of wire-level rigor.
+          This draft earns that word only in Sections 5 through 8, where the schemas live. If the
+          community reads those sections and concludes the word oversells, the fallback name is the
+          Agent Benchmark Format (ABF). The acronym to protect is ABP, one syllable per letter, easy
+          to say in CI logs: <code>abp gate failed</code>.
+        </p>
+
+        <h2 id="principles">3. Design principles</h2>
+        <p>These are inherited from Arena's methodology and are non-negotiable for conformance:</p>
+        <ol>
+          <li><strong>The engine is the unit under test.</strong> The model, provider, budget, and timeout are pinned inputs. Runs that vary the model are stamped as such and cannot back engine-vs-engine claims.</li>
+          <li><strong>The agent never grades itself.</strong> Verification material must be absent from the workspace while the agent runs, injected only after it exits, and immune to anything the agent planted.</li>
+          <li><strong>Every number carries its uncertainty.</strong> Success rates get Wilson intervals. Paired comparisons get exact McNemar. Continuous metrics get seeded bootstrap CIs. No blended scores, ever.</li>
+          <li><strong>Harness failures are not agent failures.</strong> An engine that could not be invoked is excluded from comparison, not counted as a loss.</li>
+          <li><strong>Receipts or it did not happen.</strong> A conforming result ships its manifest, transcripts, diffs, and a one-line reproduce command.</li>
+          <li><strong>Efficiency is a first-class metric.</strong> Resolution alone is a tie. Diff size, tokens, wall clock, and cost break it.</li>
+        </ol>
+
+        <h2 id="pipeline">4. The live task pipeline</h2>
+        <p>This is the part of ABP that no existing benchmark provides end to end.</p>
+
+        <h3>4.1 Sourcing</h3>
+        <p>
+          A curated registry of the top 500 open-source repositories on GitHub, filtered for: OSI
+          license, active maintainership (merged PR in the last 30 days), a runnable test suite, and
+          issue hygiene (reproducible reports, labeled backlog). The registry is versioned and
+          published; entries rotate quarterly so the pool tracks the real ecosystem.
+        </p>
+        <p>
+          From the registry, tasks are drawn by seeded random selection: pick a repo, pick an open
+          issue from its backlog that passes eligibility (reproducible, in-scope for a code change,
+          not a question or a feature debate). The seed is published with every draw, so the
+          selection itself is auditable.
+        </p>
+
+        <h3>4.2 Solving and promotion</h3>
+        <p>
+          A frontier engine (or a human, or both) builds a fix for the issue against the repo's
+          contribution rules and submits it upstream. The fix is <strong>verified</strong> when the
+          project's own CI passes and a maintainer merges it into the production branch. Maintainer
+          merge is the ground truth no synthetic benchmark has: a real reviewer accepted this change
+          into a real codebase.
+        </p>
+        <p>Two artifacts fall out of every verified fix:</p>
+        <ul>
+          <li><strong>Training data.</strong> The (issue, repo state, verified diff) triple.</li>
+          <li><strong>A golden trace.</strong> The full ABP trace (Section 6) the solving engine printed along the way: every tool call, every file read, every edit, every token count, timestamped.</li>
+        </ul>
+
+        <h3>4.3 Replay and grading</h3>
+        <p>
+          Once a task is verified, it freezes: repo pinned at the pre-fix commit, issue text
+          captured, and a verification bundle built from the repo's own test suite plus the tests
+          the verified fix added (the FAIL_TO_PASS set). Other engines then attempt the same frozen
+          task under matched config. They are graded on:
+        </p>
+        <ol>
+          <li><strong>Resolution.</strong> The held-out verification bundle passes.</li>
+          <li><strong>Efficiency, in strict order:</strong> smaller normalized git diff wins, then fewer tokens, then less wall clock, then lower cost.</li>
+        </ol>
+        <p>
+          The golden trace is published as evidence and as a study aid, not as the rubric. Version 1
+          deliberately does not grade trace similarity: an engine that reaches a passing, smaller
+          fix by a different route beats the golden trace's author. Judging architectural quality
+          and trajectory quality is a stated version 2 direction, and it needs its own adversarial
+          review before it can be a metric.
+        </p>
+
+        <h3>4.4 Contamination control</h3>
+        <p>
+          Live sourcing is also the contamination story. Issues are selected from the current
+          backlog, after every candidate model's training cutoff, and each task carries a
+          <code>sourcedAt</code> timestamp plus the model cutoffs it was verified against. Tasks age
+          out of the scored set once their fix has been public for 180 days; they remain available
+          as a practice set. Frozen-set benchmarks decay into training data. A pipeline that keeps
+          drawing from the living backlog does not.
+        </p>
+
+        <h3>4.5 Known objections, answered in the design</h3>
+        <ul>
+          <li><strong>"Smallest diff is gameable."</strong> Diff size is measured on a normalized form: formatting-only changes are canonicalized before counting, generated files and lockfiles are excluded, and test files are counted separately (deleting or weakening tests disqualifies the run, it does not shrink the diff). Resolution is still the gate; diff size only ranks engines that already passed. And the metric is honest about what it is: a proxy for surgical precision, not for design quality. Arena publishes the raw diffs, so anyone can audit whether small meant surgical or small meant degenerate.</li>
+          <li><strong>"Maintainers did not consent to being a benchmark."</strong> Sourcing follows each repo's contribution guidelines, fixes are submitted as normal PRs with disclosure, registry entries can opt out, and replay runs happen on frozen clones, never against the live repo.</li>
+          <li><strong>"Issue selection will favor easy tasks."</strong> Selection is seeded-random within eligibility, the seed is published, and difficulty is stratified in reporting (task metadata records diff size and files touched of the verified fix).</li>
+        </ul>
+
+        <h2 id="task">5. Task manifest (abp-task/v1)</h2>
+        <pre><code>{
+  "schema": "abp-task/v1",
+  "id": "gh-vercel-next.js-81234",
+  "source": {
+    "kind": "github-issue",              // or "fixture" for synthetic tasks
+    "repo": "vercel/next.js",
+    "issue": 81234,
+    "baseCommit": "9f2c41d…",            // repo frozen here (pre-fix)
+    "sourcedAt": "2026-07-02T14:11:09Z",
+    "registryVersion": "abp-registry/2026Q3",
+    "drawSeed": 424242
+  },
+  "prompt": "…full task statement given to every engine…",
+  "environment": {
+    "image": "ghcr.io/oxageninc/abp-node:22",
+    "setup": ["pnpm install --frozen-lockfile"]
+  },
+  "verification": {
+    "kind": "commands",
+    "failToPass": ["pnpm test -- test/router/edge-case.test.ts"],
+    "passToPass": ["pnpm test -- test/router/"],
+    "timeoutSeconds": 900,
+    "heldOut": true
+  },
+  "golden": {
+    "diffBytesNormalized": 1843,
+    "filesTouched": 2,
+    "trace": "traces/gh-vercel-next.js-81234.abp-trace.jsonl",
+    "mergedPr": "https://github.com/vercel/next.js/pull/81301"
+  },
+  "cutoffsVerified": ["claude-sonnet-5:2026-01", "gpt-5.2:2026-03"]
+}</code></pre>
+        <p>
+          Synthetic fixtures (like Arena's built-in tasks) use the same schema with
+          <code>source.kind: "fixture"</code> and no <code>golden</code> block. A harness must treat
+          both identically at run time.
+        </p>
+
+        <h2 id="trace">6. Trace format (abp-trace/v1)</h2>
+        <p>One JSONL file per (task, engine, trial). Every line is an event:</p>
+        <pre><code>{"t":"2026-07-02T14:12:01.402Z","seq":1,"kind":"run.start",
+ "engine":"oxagen/1.4.2","model":"anthropic/claude-sonnet-5",
+ "task":"gh-vercel-next.js-81234","config":{"budgetUsd":5,"timeoutSeconds":1200}}
+{"t":"…","seq":2,"kind":"model.call",
+ "tokens":{"input":1204,"output":388,"cacheRead":9120,"cacheWrite":0}}
+{"t":"…","seq":3,"kind":"tool.call","tool":"read_file",
+ "args":{"path":"src/router/match.ts"},"durationMs":12}
+{"t":"…","seq":4,"kind":"tool.call","tool":"edit_file",
+ "args":{"path":"src/router/match.ts"},"diffBytes":412}
+{"t":"…","seq":5,"kind":"subagent.start","id":"sa-1","purpose":"run tests"}
+{"t":"…","seq":6,"kind":"run.end","outcome":"resolved","wallClockMs":184201,
+ "tokens":{"input":48210,"output":9114,"cacheRead":301200,"cacheWrite":8100},
+ "diffBytesNormalized":1610,"filesTouched":2}</code></pre>
+        <p>Rules:</p>
+        <ul>
+          <li><code>seq</code> is a strictly increasing integer; <code>t</code> is RFC 3339 UTC. Together they make traces diffable and mergeable.</li>
+          <li><code>tool.call</code> events record the tool name and a redacted argument summary, never raw secrets. A published redaction list is part of conformance.</li>
+          <li>Multi-agent engines emit <code>subagent.start</code> / <code>subagent.end</code> with nested attribution, so a fan-out engine's token bill is visible per branch. Multi-model engines record <code>model</code> per <code>model.call</code>. This is how ABP stays meaningful for orchestrators, not just single-loop CLIs.</li>
+          <li>Token counts follow Arena's normalization: <code>input</code> never includes cache reads; cache reads and writes are tracked separately.</li>
+          <li>An engine that cannot emit ABP traces natively can ship a sidecar translator; the harness records which path produced the trace.</li>
+        </ul>
+
+        <h2 id="run">7. Run configuration (abp-run/v1)</h2>
+        <p>The manifest a harness must write before the first trial:</p>
+        <pre><code>{
+  "schema": "abp-run/v1",
+  "engines": [{"name": "oxagen", "version": "1.4.2"},
+              {"name": "claude-code", "version": "2.1.0"}],
+  "model": "anthropic/claude-sonnet-5",
+  "matchedModels": true,
+  "budgetUsd": 5,
+  "timeoutSeconds": 1200,
+  "trials": 3,
+  "ordering": "abba",
+  "seed": 20260718,
+  "tasks": ["gh-vercel-next.js-81234", "…"],
+  "host": {"os": "linux", "arch": "arm64", "containerized": true},
+  "reproduce": "abp run --config run.json"
+}</code></pre>
+        <p>
+          <code>matchedModels: false</code> runs are legal (you may want to test your engine across
+          models) but a conforming report must lead with the warning and must not present
+          engine-vs-engine conclusions from them.
+        </p>
+
+        <h2 id="verdict">8. Verdict format (abp-verdict/v1)</h2>
+        <pre><code>{
+  "schema": "abp-verdict/v1",
+  "run": "run-20260718-a41c",
+  "perEngine": [{
+    "engine": "oxagen",
+    "scoredTrials": 72,
+    "excludedEngineErrors": 1,
+    "resolveRate": {"point": 0.84, "wilson95": [0.71, 0.92]},
+    "medianDiffBytesNormalized": 1650,
+    "medianTokensTotal": 361000,
+    "medianWallClockMs": 190334,
+    "medianComputedUsd": 1.42
+  }],
+  "pairwise": [{
+    "a": "oxagen", "b": "claude-code",
+    "mcnemar": {"discordant": [14, 5], "pExact": 0.041},
+    "diffDelta": {"relMedian": -0.22, "bootstrap95": [-0.31, -0.09],
+                  "seed": 20260718}
+  }],
+  "receipts": {"trials": "trials/", "transcripts": "transcripts/",
+               "diffs": "diffs/", "traces": "traces/"}
+}</code></pre>
+
+        <h2 id="conformance">9. Conformance levels</h2>
+        <ul>
+          <li><strong>ABP-core.</strong> The harness consumes <code>abp-task/v1</code>, enforces held-out verification and matched config, and emits <code>abp-run/v1</code> + <code>abp-verdict/v1</code> with the required statistics. Arena today is one file-format migration away from ABP-core.</li>
+          <li><strong>ABP-traces.</strong> Everything in core, plus <code>abp-trace/v1</code> emission for every trial, with subagent and multi-model attribution.</li>
+          <li><strong>ABP-live.</strong> Everything in traces, plus participation in the live task pipeline: consuming registry draws, contributing verified fixes, and publishing golden traces.</li>
+        </ul>
+        <p>
+          Conformance is claimed by shipping a passing run of the public conformance suite (a set of
+          adversarial fixtures: a task that tries to plant verification files, an envelope that lies
+          about tokens, a trial that must be scored engine-error) and linking the receipts.
+        </p>
+
+        <h2 id="ci">10. CI integration</h2>
+        <p>
+          The reason ABP should win: it is the only benchmark designed to be run on every pull
+          request, not once per launch.
+        </p>
+        <pre><code># .github/workflows/agent-quality.yml
+- run: abp run --config abp-run.json -o results
+- run: abp gate results/run-latest --baseline abp-baseline.json --require-significant</code></pre>
+        <p>
+          The gate semantics are Arena's, generalized: fail on a statistically significant
+          resolve-rate drop, or on median token, cost, diff-size, or wall-clock growth past
+          committed thresholds; refuse to compare across mismatched task sets. The baseline is a
+          committed JSON artifact, so the PR that degrades the agent goes red the same day, with
+          receipts attached.
+        </p>
+
+        <h2 id="roadmap">11. Roadmap</h2>
+        <div class="tablewrap">
+        <table>
+          <thead><tr><th>Phase</th><th>Deliverable</th><th>Exit criterion</th></tr></thead>
+          <tbody>
+            <tr><td>0 (now)</td><td>Arena as reference harness; this draft public at arena.oxagen.sh</td><td>Draft survives public review</td></tr>
+            <tr><td>1</td><td>Schemas frozen at v1; Arena emits and consumes all four formats; conformance suite published</td><td>Two non-Oxagen engines emit valid traces</td></tr>
+            <tr><td>2</td><td>Live pipeline pilot: 25-repo registry subset, 100 verified tasks, golden traces published</td><td>External team reproduces a published verdict from receipts alone</td></tr>
+            <tr><td>3</td><td>Registry at 500 repos; hosted leaderboard with matched-model brackets; GitHub Action in the marketplace</td><td>ABP gate running in 100 external repos' CI</td></tr>
+            <tr><td>4</td><td>Version 2 exploration: trajectory quality, architectural review, multi-agent orchestration scoring</td><td>Community RFC process</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <h2 id="open">12. Open questions</h2>
+        <ol>
+          <li>Trace redaction: how much tool-argument detail can be published from runs on private code without leaking it? Current answer: conformance requires the redaction list, and private runs may withhold traces while still claiming ABP-core.</li>
+          <li>Who signs verified tasks? A task's freeze bundle should be content-addressed and signed by the registry, or a poisoned mirror can grade dishonestly.</li>
+          <li>Diff normalization is specified per-language (formatter canonicalization). The v1 scope is the languages with deterministic formatters; the escape hatch is byte counts on <code>git diff --numstat</code> with published exclusions.</li>
+          <li>Should golden traces ever become the rubric? Version 1 says no. If v2 explores it, trace-similarity grading must never punish a better route to a passing fix.</li>
+        </ol>
+
+        <p class="muted">
+          Feedback: open an issue at
+          <a href="https://github.com/oxageninc/arena/issues">github.com/oxageninc/arena</a> with the
+          <code>abp</code> label. The markdown source of this spec lives in the repo at
+          <code>docs/agent-benchmark-protocol.md</code>.
+        </p>
+      </div>
+    </article>
+  </div>
+
+  <div class="wrap">
+    <footer class="site-foot">
+      <span>MIT © Mac Anderson · <a href="https://oxagen.sh">Oxagen</a></span>
+      <span><a href="https://github.com/oxageninc/arena">github.com/oxageninc/arena</a></span>
+    </footer>
+  </div>
+</body>
+</html>
