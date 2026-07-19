@@ -15,7 +15,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isRecord } from "./parse.js";
-import { mcnemarExact, median, pairedBootstrapDelta, wilsonInterval } from "./stats.js";
+import { mcnemarExact, median, pairedBootstrapDelta } from "./stats.js";
+import { perAgentSummary } from "./summary.js";
 import type { RunManifest, TrialResult } from "./types.js";
 
 export function loadRun(runDir: string): {
@@ -97,22 +98,21 @@ export function generateReport(runDir: string): string {
   }
 
   // ── Per-agent summary ──
+  // perAgentSummary is the single source of truth shared with the baseline
+  // and the gate, so the report can never disagree with what CI enforces.
+  const summaries = perAgentSummary(results);
   lines.push("## Results by agent", "");
   lines.push(
     "| Agent | Scored trials | Passed | Success rate (95% CI) | Median wall clock | Median tokens (billed) | Median computed cost | Self-reported cost |",
     "|---|---|---|---|---|---|---|---|",
   );
-  for (const key of keys) {
-    const all = byAgent.get(key) ?? [];
-    const scored = all.filter((r) => r.outcome !== "agent-error");
-    const passed = scored.filter((r) => r.outcome === "passed").length;
-    const [lo, hi] = wilsonInterval(passed, scored.length);
-    const wall = median(scored.map((r) => r.timing.wallClockSeconds));
-    const toks = median(scored.map((r) => r.tokens.total));
-    const costs = scored.map((r) => r.cost.computedUsd).filter((c): c is number => c !== null);
-    const self = scored.map((r) => r.cost.agentReportedUsd).filter((c): c is number => c !== null);
+  for (const s of summaries) {
+    const wall =
+      s.medianWallClockSeconds === null ? "—" : `${s.medianWallClockSeconds.toFixed(1)}s`;
+    const toks =
+      s.medianTotalTokens === null ? "—" : Math.round(s.medianTotalTokens).toLocaleString();
     lines.push(
-      `| ${key} | ${String(scored.length)} | ${String(passed)} | ${pct(scored.length ? passed / scored.length : 0)} (${pct(lo)}–${pct(hi)}) | ${wall.toFixed(1)}s | ${Math.round(toks).toLocaleString()} | ${fmtUsd(costs.length ? median(costs) : null)} | ${fmtUsd(self.length ? median(self) : null)} |`,
+      `| ${s.key} | ${String(s.scoredTrials)} | ${String(s.passed)} | ${pct(s.successRate)} (${pct(s.successCI[0])}–${pct(s.successCI[1])}) | ${wall} | ${toks} | ${fmtUsd(s.medianComputedCost)} | ${fmtUsd(s.medianAgentReportedCost)} |`,
     );
   }
   lines.push("");
@@ -120,6 +120,13 @@ export function generateReport(runDir: string): string {
     "Token counts are normalized (input excludes cache reads; cache reads and writes tracked separately). Computed cost applies one shared pricing table to every agent; “—” means the model has no pricing entry (cost is never guessed).",
     "",
   );
+  const unmetered = summaries.reduce((n, s) => n + s.unmeteredTrials, 0);
+  if (unmetered > 0) {
+    lines.push(
+      `> ℹ️ ${String(unmetered)} scored trial(s) reported no parseable token usage (envelope missing or truncated). They count toward success rates but are excluded from token/cost medians and deltas.`,
+      "",
+    );
+  }
 
   // ── Pairwise comparisons ──
   if (keys.length >= 2) {
@@ -228,11 +235,13 @@ function pairwiseSection(
     "",
   );
 
+  // Zero-token trials mean "usage unknown" (unparseable envelope), so token
+  // and cost metrics treat them as missing rather than as literal zeros.
   const metrics: { label: string; get: (r: TrialResult) => number | null }[] = [
     { label: "Wall clock (s)", get: (r) => r.timing.wallClockSeconds },
-    { label: "Total tokens", get: (r) => r.tokens.total },
-    { label: "Output tokens", get: (r) => r.tokens.output },
-    { label: "Computed cost (USD)", get: (r) => r.cost.computedUsd },
+    { label: "Total tokens", get: (r) => (r.tokens.total > 0 ? r.tokens.total : null) },
+    { label: "Output tokens", get: (r) => (r.tokens.total > 0 ? r.tokens.output : null) },
+    { label: "Computed cost (USD)", get: (r) => (r.tokens.total > 0 ? r.cost.computedUsd : null) },
   ];
   lines.push(`| Metric | ${aKey} (median) | ${bKey} (median) | Δ relative to ${aKey} (95% CI) |`);
   lines.push("|---|---|---|---|");

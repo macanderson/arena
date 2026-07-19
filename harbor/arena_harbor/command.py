@@ -55,6 +55,13 @@ def build_command(
         "timeout": timeout or "1800",
         "instruction": shlex.quote(instruction),
     }
+    if "{budget}" in spec.run_template and not mapping["budget"]:
+        # An empty {budget} would render e.g. "--max-usd --json", making the
+        # flag silently eat the next token. Fail loudly instead.
+        raise ValueError(
+            f"agent '{spec.name}': run_template references {{budget}} but no "
+            "budget is set (set ARENA_BUDGET or default_budget in the spec)."
+        )
     return render_template(spec.run_template, mapping)
 
 

@@ -137,7 +137,7 @@ async function cmdRun(argv: string[]): Promise<void> {
       budget: { type: "string" },
       timeout: { type: "string" },
       seed: { type: "string" },
-      out: { type: "string" },
+      out: { type: "string", short: "o" },
     },
   });
 
@@ -157,6 +157,18 @@ async function cmdRun(argv: string[]): Promise<void> {
     return { adapter: adapter.trim(), model: resolved.trim() };
   });
 
+  // Duplicate (adapter, model) specs would produce colliding trial ids and
+  // silently overwrite each other's receipts.
+  const specKeys = agents.map((a) => `${a.adapter}=${a.model}`);
+  const dupes = [...new Set(specKeys.filter((k, i) => specKeys.indexOf(k) !== i))];
+  if (dupes.length > 0) {
+    console.error(
+      `Duplicate agent spec(s): ${dupes.join(", ")}. ` +
+        "Trial ids would collide — run A/A comparisons as two separate runs.",
+    );
+    process.exit(1);
+  }
+
   const allTasks = loadTasks(TASK_ROOT);
   let tasks: LoadedTask[] = allTasks;
   if (values.tasks && values.tasks !== "all") {
@@ -172,10 +184,12 @@ async function cmdRun(argv: string[]): Promise<void> {
   const config = {
     agents,
     tasks,
-    trials: values.trials ? parseInt(values.trials, 10) : 3,
-    ...(values.budget !== undefined ? { budgetUsd: parseFloat(values.budget) } : {}),
-    timeoutSeconds: values.timeout ? parseInt(values.timeout, 10) : 600,
-    seed: values.seed ? parseInt(values.seed, 10) : 42,
+    trials: numericFlag("trials", values.trials, 3, { integer: true, min: 1 }),
+    ...(values.budget !== undefined
+      ? { budgetUsd: numericFlag("budget", values.budget, 0, { min: 0 }) }
+      : {}),
+    timeoutSeconds: numericFlag("timeout", values.timeout, 600, { integer: true, min: 1 }),
+    seed: numericFlag("seed", values.seed, 42, { integer: true, min: 0 }),
     outDir: resolve(values.out ?? "results"),
   };
 
@@ -183,6 +197,31 @@ async function cmdRun(argv: string[]): Promise<void> {
   const report = generateReport(runDir);
   writeFileSync(join(runDir, "report.md"), report);
   console.log(`\nRun complete. Report: ${join(runDir, "report.md")}`);
+}
+
+/**
+ * Parse a numeric flag strictly. `parseInt`-style prefix parsing is rejected
+ * ("10m" is an error, not 10) and NaN never leaks into the run config, where
+ * it would silently produce instant timeouts or an empty "successful" run.
+ */
+function numericFlag(
+  flag: string,
+  raw: string | undefined,
+  fallback: number,
+  opts: { integer?: boolean; min?: number } = {},
+): number {
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  const wholeOk = opts.integer !== true || Number.isInteger(n);
+  const minOk = opts.min === undefined || n >= opts.min;
+  if (!Number.isFinite(n) || !wholeOk || !minOk) {
+    console.error(
+      `--${flag} must be ${opts.integer ? "an integer" : "a number"}` +
+        `${opts.min !== undefined ? ` >= ${String(opts.min)}` : ""}, got "${raw}"`,
+    );
+    process.exit(1);
+  }
+  return n;
 }
 
 function cmdReport(argv: string[]): void {
@@ -203,6 +242,15 @@ function cmdReport(argv: string[]): void {
  */
 function cmdVerify(argv: string[]): void {
   const all = loadTasks(TASK_ROOT);
+  if (argv.length > 0) {
+    // An id that matches nothing must fail loudly: CI configured with a
+    // renamed task would otherwise "audit" zero tasks and pass forever.
+    const missing = argv.filter((id) => !all.some((t) => t.id === id));
+    if (missing.length > 0) {
+      console.error(`Unknown task id(s): ${missing.join(", ")}. Run \`arena list\`.`);
+      process.exit(1);
+    }
+  }
   const tasks = argv.length > 0 ? all.filter((t) => argv.includes(t.id)) : all;
   let failures = 0;
 
@@ -315,20 +363,25 @@ function cmdGate(argv: string[]): void {
   const configPath =
     values.config ?? (existsSync(resolve("arena-gate.json")) ? "arena-gate.json" : undefined);
   const thresholds: GateThresholds = loadGateConfig(configPath ? resolve(configPath) : undefined);
-  // A finite number, or null (a non-numeric flag value disables the check).
-  const num = (v: string | undefined): number | null => {
+  // Strict: a typo'd threshold ("--tokens-increase ten") must error, not
+  // silently disable the guard it was meant to set.
+  const num = (flag: string, v: string | undefined): number | null => {
     if (v === undefined) return null;
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n : null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) {
+      console.error(`--${flag} must be a number, got "${v}"`);
+      process.exit(1);
+    }
+    return n;
   };
   if (values["accuracy-drop"] !== undefined)
-    thresholds.accuracyMaxDropPoints = num(values["accuracy-drop"]) ?? 0;
+    thresholds.accuracyMaxDropPoints = num("accuracy-drop", values["accuracy-drop"]) ?? 0;
   if (values["tokens-increase"] !== undefined)
-    thresholds.tokensMaxIncreasePct = num(values["tokens-increase"]);
+    thresholds.tokensMaxIncreasePct = num("tokens-increase", values["tokens-increase"]);
   if (values["cost-increase"] !== undefined)
-    thresholds.costMaxIncreasePct = num(values["cost-increase"]);
+    thresholds.costMaxIncreasePct = num("cost-increase", values["cost-increase"]);
   if (values["speed-increase"] !== undefined)
-    thresholds.speedMaxIncreasePct = num(values["speed-increase"]);
+    thresholds.speedMaxIncreasePct = num("speed-increase", values["speed-increase"]);
   if (values["require-significant"]) thresholds.accuracyRequireSignificant = true;
   if (values["allow-task-mismatch"]) thresholds.allowTaskMismatch = true;
 

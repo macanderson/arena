@@ -22,9 +22,10 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Extract the machine-readable JSON envelope from an agent's stdout.
  *
- * Headless agent CLIs print either a single JSON object or JSONL (one event
- * per line). We want the last `type: "result"` object, falling back to the
- * last parseable object. Banners and log lines are ignored.
+ * Headless agent CLIs print either a single JSON object, JSONL (one event per
+ * line), or a pretty-printed (multi-line) object. We want the last
+ * `type: "result"` object, falling back to the last parseable object. Banners
+ * and log lines are ignored.
  */
 export function parseJsonEnvelope(stdout: string): Record<string, unknown> | null {
   if (!stdout) return null;
@@ -47,7 +48,71 @@ export function parseJsonEnvelope(stdout: string): Record<string, unknown> | nul
     }
   }
 
-  return fallback;
+  // No single-line result envelope. Pretty-printed envelopes span lines, so
+  // fall back to a string-aware brace scan over the whole output.
+  const scanned = scanJsonObjects(stdout);
+  for (let i = scanned.length - 1; i >= 0; i--) {
+    const obj = scanned[i] as Record<string, unknown>;
+    if (obj["type"] === "result") return obj;
+  }
+
+  return fallback ?? scanned[scanned.length - 1] ?? null;
+}
+
+/**
+ * Find every top-level JSON object in a text that may also contain non-JSON
+ * noise. Candidates are anchored at lines that START with `{` (a
+ * pretty-printed envelope's opening line), so a stray brace mid-way through a
+ * log line can never derail the scan. From each anchor, string-aware brace
+ * matching finds the balanced end; spans that fail `JSON.parse` are skipped.
+ */
+function scanJsonObjects(text: string): Record<string, unknown>[] {
+  const found: Record<string, unknown>[] = [];
+  let offset = 0;
+  let consumedUpTo = -1;
+  for (const line of text.split("\n")) {
+    const lineStart = offset;
+    offset += line.length + 1;
+    if (lineStart < consumedUpTo) continue; // inside an already-parsed object
+    const firstNonSpace = line.search(/\S/);
+    if (firstNonSpace === -1 || line[firstNonSpace] !== "{") continue;
+    const start = lineStart + firstNonSpace;
+    const end = balancedObjectEnd(text, start);
+    if (end === -1) continue;
+    try {
+      const obj: unknown = JSON.parse(text.slice(start, end + 1));
+      if (isRecord(obj)) {
+        found.push(obj);
+        consumedUpTo = end + 1;
+      }
+    } catch {
+      // Balanced braces but not JSON — skip this anchor.
+    }
+  }
+  return found;
+}
+
+/** Index of the `}` closing the object opened at `start`, or -1. */
+function balancedObjectEnd(text: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 /** Make a string safe as a single path segment (model slugs contain "/"). */

@@ -132,6 +132,18 @@ class ArenaInstalledAgent(BaseInstalledAgent):
         )
         env = forwarded_env(spec)
 
+        # Accept "600", "600.5", etc. A non-numeric ARENA_TIMEOUT must not
+        # silently disable the container timeout.
+        try:
+            timeout_sec: int | None = int(float(timeout))
+        except ValueError:
+            timeout_sec = 1800
+            self.logger.warning(
+                "arena-harbor: ARENA_TIMEOUT=%r is not numeric; using %ss",
+                timeout,
+                timeout_sec,
+            )
+
         # Run directly (not exec_as_agent) so a non-zero agent exit does NOT
         # abort the trial before Harbor's verifier gets to judge the workspace.
         # The verifier — never the CLI's exit code — decides pass/fail.
@@ -139,7 +151,7 @@ class ArenaInstalledAgent(BaseInstalledAgent):
             result = await environment.exec(
                 command=command,
                 env=env,
-                timeout_sec=int(timeout) if timeout.isdigit() else None,
+                timeout_sec=timeout_sec,
             )
             self._agent_output = "\n".join(
                 part

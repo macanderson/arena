@@ -136,8 +136,13 @@ def spec_from_dict(data: dict[str, Any]) -> AgentSpec:
     if metrics_raw is not None:
         if not isinstance(metrics_raw, dict):
             raise ValueError("'metrics' must be a table/object")
+        metrics_kind = metrics_raw.get("kind", "json_tail")
+        if metrics_kind not in ("json_tail", "regex"):
+            raise ValueError(
+                f"metrics.kind must be 'json_tail' or 'regex', got '{metrics_kind}'"
+            )
         metrics = MetricsSpec(
-            kind=metrics_raw.get("kind", "json_tail"),
+            kind=metrics_kind,
             input_path=metrics_raw.get("input_path"),
             output_path=metrics_raw.get("output_path"),
             cache_read_path=metrics_raw.get("cache_read_path"),
