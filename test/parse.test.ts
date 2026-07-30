@@ -27,6 +27,39 @@ describe("parseJsonEnvelope", () => {
     expect(parseJsonEnvelope(stdout)).toEqual({ type: "result", ok: true });
   });
 
+  it("parses a pretty-printed (multi-line) envelope", () => {
+    const stdout = [
+      "INFO starting",
+      "{",
+      '  "type": "result",',
+      '  "usage": {',
+      '    "input_tokens": 1200',
+      "  }",
+      "}",
+      "INFO done",
+    ].join("\n");
+    expect(parseJsonEnvelope(stdout)).toEqual({
+      type: "result",
+      usage: { input_tokens: 1200 },
+    });
+  });
+
+  it("prefers a multi-line result envelope and survives braces inside strings", () => {
+    const stdout = [
+      'log with a stray { brace and "quote',
+      "{",
+      '  "type": "result",',
+      '  "note": "contains } and { inside a string",',
+      '  "n": 9',
+      "}",
+    ].join("\n");
+    expect(parseJsonEnvelope(stdout)).toEqual({
+      type: "result",
+      note: "contains } and { inside a string",
+      n: 9,
+    });
+  });
+
   it("parses a pretty-printed (multi-line) envelope, as gemini-cli emits", () => {
     const stdout = [
       "Loaded config",

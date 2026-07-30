@@ -66,33 +66,53 @@ function tryParseRecord(text: string): Record<string, unknown> | null {
   }
 }
 
-/** Split text into top-level `{…}` runs, brace-matched and JSON-string-aware. */
+/**
+ * Split text into top-level `{…}` runs, brace-matched and JSON-string-aware.
+ * Candidates are anchored at lines that START with `{` (a pretty-printed
+ * envelope's opening line): a stray brace mid-way through a log line can
+ * therefore never derail the scan into treating the rest of the output as
+ * one unterminated string.
+ */
 function topLevelJsonBlocks(text: string): string[] {
   const blocks: string[] = [];
+  let offset = 0;
+  let consumedUpTo = -1;
+  for (const line of text.split("\n")) {
+    const lineStart = offset;
+    offset += line.length + 1;
+    if (lineStart < consumedUpTo) continue; // inside a previous block
+    const firstNonSpace = line.search(/\S/);
+    if (firstNonSpace === -1 || line[firstNonSpace] !== "{") continue;
+    const start = lineStart + firstNonSpace;
+    const end = balancedObjectEnd(text, start);
+    if (end === -1) continue;
+    blocks.push(text.slice(start, end + 1));
+    consumedUpTo = end + 1;
+  }
+  return blocks;
+}
+
+/** Index of the `}` closing the object opened at `start`, or -1. */
+function balancedObjectEnd(text: string, start: number): number {
   let depth = 0;
-  let start = -1;
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = start; i < text.length; i++) {
     const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
       else if (ch === '"') inString = false;
-    } else if (ch === '"') {
-      if (depth > 0) inString = true;
-    } else if (ch === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (ch === "}" && depth > 0) {
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
       depth--;
-      if (depth === 0 && start !== -1) {
-        blocks.push(text.slice(start, i + 1));
-        start = -1;
-      }
+      if (depth === 0) return i;
     }
   }
-  return blocks;
+  return -1;
 }
 
 /** Make a string safe as a single path segment (model slugs contain "/"). */

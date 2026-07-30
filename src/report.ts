@@ -117,6 +117,13 @@ export function generateReport(runDir: string): string {
     "Token counts are normalized (input excludes cache reads; cache reads and writes tracked separately). Computed cost applies one shared pricing table to every agent; “—” means the model has no pricing entry (cost is never guessed).",
     "",
   );
+  const unmetered = summaries.reduce((n, s) => n + s.unmeteredTrials, 0);
+  if (unmetered > 0) {
+    lines.push(
+      `> ℹ️ ${String(unmetered)} scored trial(s) reported no parseable token usage (envelope missing or truncated). They count toward success rates but are excluded from token/cost medians and deltas.`,
+      "",
+    );
+  }
 
   // ── Pairwise comparisons ──
   if (keys.length >= 2) {
@@ -225,11 +232,13 @@ function pairwiseSection(
     "",
   );
 
+  // Zero-token trials mean "usage unknown" (unparseable envelope), so token
+  // and cost metrics treat them as missing rather than as literal zeros.
   const metrics: { label: string; get: (r: TrialResult) => number | null }[] = [
     { label: "Wall clock (s)", get: (r) => r.timing.wallClockSeconds },
-    { label: "Total tokens", get: (r) => r.tokens.total },
-    { label: "Output tokens", get: (r) => r.tokens.output },
-    { label: "Computed cost (USD)", get: (r) => r.cost.computedUsd },
+    { label: "Total tokens", get: (r) => (r.tokens.total > 0 ? r.tokens.total : null) },
+    { label: "Output tokens", get: (r) => (r.tokens.total > 0 ? r.tokens.output : null) },
+    { label: "Computed cost (USD)", get: (r) => (r.tokens.total > 0 ? r.cost.computedUsd : null) },
   ];
   lines.push(`| Metric | ${aKey} (median) | ${bKey} (median) | Δ relative to ${aKey} (95% CI) |`);
   lines.push("|---|---|---|---|");

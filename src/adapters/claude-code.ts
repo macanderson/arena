@@ -21,11 +21,15 @@ export class ClaudeCodeAdapter extends Adapter {
   readonly name = "claude-code";
   protected readonly defaultBinary = "claude";
 
-  /** `anthropic/claude-sonnet-5` → `sonnet`; unrecognized slugs pass through. */
+  /**
+   * `anthropic/claude-sonnet-5` → `claude-sonnet-5`; bare ids and aliases
+   * pass through. The full id is preserved (never collapsed to a family
+   * alias like `sonnet`): an alias floats to whatever the installed CLI's
+   * default is, which silently breaks version pinning, `matchedModels`, and
+   * pricing-table lookups.
+   */
   override resolveModel(model: string): string {
-    const bare = model.replace(/^anthropic\//, "");
-    const family = bare.match(/^claude-(opus|sonnet|haiku|fable)/)?.[1];
-    return family ?? bare;
+    return model.replace(/^anthropic\//, "");
   }
 
   buildArgs(args: AdapterRunArgs): string[] {

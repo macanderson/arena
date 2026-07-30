@@ -44,11 +44,14 @@ export function computeCost(
 ): number | null {
   const rate = pricing[model];
   if (!rate) return null;
-  const cacheWriteRate = rate.cacheWritePerM ?? rate.inputPerM;
+  // Cache-write rates differ per vendor. If the trial wrote cache tokens and
+  // the table has no cacheWritePerM, the true cost is unknown — report null
+  // rather than guessing with the input rate ("cost is never guessed").
+  if (tokens.cacheWrite > 0 && rate.cacheWritePerM === undefined) return null;
   return (
     (tokens.input / 1e6) * rate.inputPerM +
     (tokens.output / 1e6) * rate.outputPerM +
     (tokens.cacheRead / 1e6) * rate.cacheReadPerM +
-    (tokens.cacheWrite / 1e6) * cacheWriteRate
+    (tokens.cacheWrite / 1e6) * (rate.cacheWritePerM ?? 0)
   );
 }
