@@ -23,7 +23,7 @@ classifiers = [
 # Built and tested against 0.6.x; the range admits later 0.x releases the
 # spec-driven surface has stayed compatible with. Tighten if Harbor breaks API.
 dependencies = [
-  "harbor>=0.6,<0.22",
+  "harbor>=0.6,<0.23",
 ]
 
 [project.optional-dependencies]
